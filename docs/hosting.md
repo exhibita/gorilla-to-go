@@ -52,6 +52,8 @@ The result must show `exhibita.github.io`.
 
 1. Open https://github.com/exhibita/gorilla-to-go/settings/pages.
 2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+
+   Do not select **Deploy from a branch**. With that setting, GitHub publishes the full repository with Jekyll. The address then shows the README, not the app.
 3. Under **Custom domain**, type `gtg.exhibita.com`.
 4. Tap **Save**.
 5. Wait until GitHub shows **DNS check successful**.
