@@ -10,6 +10,8 @@ import { NEW_PAGE_TYPES, slugify, slugProblem, pagePath, localDate, newPageText 
 import { icon } from '../dom.js';
 import { back, navigate } from '../router.js';
 
+const TYPE_ADDRESS = 'Type an address. Use small letters (a to z), digits and dashes.';
+
 const addressText = (type, slug) => pagePath(type, slug || '…').replace(/^src/, '').replace(/index\.md$/, '');
 
 export async function newPageScreen(container, [siteId]) {
@@ -73,7 +75,11 @@ export async function newPageScreen(container, [siteId]) {
     const showAddress = () => {
         const slug = slugInput.value.trim();
         const problem = slug ? slugProblem(slug, { type: type(), existingPaths }) : null;
-        hint.textContent = problem ?? `Address on the site: ${addressText(type(), slug)}. You cannot change the address after you publish.`;
+        // A title in another alphabet (for example Cyrillic) gives no address: ask for one.
+        const needsAddress = !slug && titleInput.value.trim() !== '';
+        hint.textContent = problem ?? (needsAddress
+            ? TYPE_ADDRESS
+            : `Address on the site: ${addressText(type(), slug)}. You cannot change the address after you publish.`);
         hint.classList.toggle('field-hint--error', Boolean(problem));
         slugInput.setAttribute('aria-invalid', String(Boolean(problem)));
     };
@@ -106,7 +112,7 @@ export async function newPageScreen(container, [siteId]) {
         }
         const problem = slugProblem(slug, { type: type(), existingPaths });
         if (problem) {
-            errorBox.textContent = slug ? problem : 'Type an address. The title has no letters or digits for an address.';
+            errorBox.textContent = slug ? problem : TYPE_ADDRESS;
             slugInput.focus();
             return;
         }

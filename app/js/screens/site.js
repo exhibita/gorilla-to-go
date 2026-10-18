@@ -142,6 +142,7 @@ export async function siteScreen(container, [id]) {
         <div class="sheet-body">
             <h2 class="sheet-title" id="remove-title">Remove ${name}?</h2>
             <p>The app deletes this site, its token and its saved pages from this device. The repository on GitHub does not change.</p>
+            <p class="banner" id="remove-new-pages" hidden></p>
             <p class="message-error" id="remove-error" role="alert"></p>
             <button type="button" class="btn btn-danger" id="confirm-remove">Remove site</button>
             <button type="button" class="btn btn-secondary" data-close>Cancel</button>
@@ -170,8 +171,15 @@ export async function siteScreen(container, [id]) {
         });
     }
     $('#switcher a[href="#/add"]').addEventListener('click', () => $('#switcher').close());
-    $('#open-remove').addEventListener('click', () => {
+    $('#open-remove').addEventListener('click', async () => {
         $('#site-sheet').close();
+        // New pages that are not published exist only on this device: say that they go too.
+        const newPages = await listNewPages(site.id).catch(() => []);
+        const note = $('#remove-new-pages');
+        note.textContent = newPages.length === 1
+            ? 'This site has 1 new page that is not published. The app deletes it too.'
+            : `This site has ${newPages.length} new pages that are not published. The app deletes them too.`;
+        note.hidden = newPages.length === 0;
         $('#remove').showModal();
     });
     $('#confirm-remove').addEventListener('click', async () => {

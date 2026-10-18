@@ -393,3 +393,19 @@ test('pathExists reports a refused token and no connection', async () => {
     await assert.rejects(ask(async () => json(401, {})), { message: 'Token not accepted' });
     await assert.rejects(ask(async () => { throw new TypeError('Failed to fetch'); }), err => err.offline === true);
 });
+
+test('saveFile for a new page: a 409 with no file on GitHub is not "the page exists"', async () => {
+    const { fetch } = fakeFetch({
+        [`PUT ${REPO}/contents/src/x/index.md`]: () => json(409, {}),
+        [`GET ${REPO}/contents/src/x/index.md?ref=main`]: () => json(404, {})
+    });
+    await assert.rejects(saveFile({ ...saveArgs, sha: undefined, fetch }), err => !err.conflict && /Try again/.test(err.message));
+});
+
+test('saveFile for a new page: a refusal because the file exists is a conflict', async () => {
+    const { fetch } = fakeFetch({
+        [`PUT ${REPO}/contents/src/x/index.md`]: () => json(422, {}),
+        [`GET ${REPO}/contents/src/x/index.md?ref=main`]: fileRoute('SOMEONE ELSE', 'THEIRSHA')
+    });
+    await assert.rejects(saveFile({ ...saveArgs, sha: undefined, fetch }), err => err.conflict === true);
+});

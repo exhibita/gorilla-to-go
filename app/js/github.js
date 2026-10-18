@@ -270,6 +270,9 @@ export async function saveFile({ owner, repo, branch, path, text, sha, message, 
         // An earlier save of this text (for example after a time-out) also gives 409: it is not a conflict.
         const now = await readNow();
         if (now?.text === text) return { sha: now.sha };
+        // A new page (no SHA) and still no file: the refusal had another cause (for example the
+        // branch moved during the save). It is not "the page exists".
+        if (sha === undefined && now === null) throw new GitHubError('GitHub did not save the page. Try again');
         // 422 for a file that did not change on GitHub is another error (for example a bad branch).
         if (response.status === 422 && now?.sha === sha) throw new GitHubError('GitHub error 422');
         throw Object.assign(new GitHubError('This page changed on GitHub after you opened it.'), { conflict: true });

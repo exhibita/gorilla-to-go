@@ -11,7 +11,7 @@ import { splitPage, composePage, setFields, editedBody } from '../frontmatter-wr
 import { classifyPath, listTimeText, TYPE_LABELS } from '../pages-logic.js';
 import { toggleWrap, toggleLinePrefix, insertLink, createHistory } from '../editor-logic.js';
 import { getLocalEdit, saveLocalEdit, deleteLocalEdit } from '../edits.js';
-import { saveFile } from '../github.js';
+import { saveFile, pathExists } from '../github.js';
 import { sanitizeHtml } from '../sanitize.js';
 import { escapeHtml, icon } from '../dom.js';
 import { back, navigate } from '../router.js';
@@ -81,7 +81,7 @@ export async function editorScreen(container, [siteId, path]) {
         startText = newPage.text;
     }
     const siteHref = `#/site/${encodeURIComponent(site.id)}`;
-    let backHref = isNew ? siteHref : pageHref;
+    const backHref = isNew ? siteHref : pageHref;
 
     // The state of the editor: the file parts, the front matter fields, and the text in the textarea.
     let parts;
@@ -207,11 +207,13 @@ export async function editorScreen(container, [siteId, path]) {
     deleteDialog.querySelector('[data-close]').addEventListener('click', () => deleteDialog.close());
     $('#open-delete-new')?.addEventListener('click', () => deleteDialog.showModal());
     $('#confirm-delete-new').addEventListener('click', async () => {
+        // During Publish the page can still go to GitHub, so Delete waits until Publish ends.
+        if (publishing) return;
         clearTimeout(keepTimer);
         isDeleted = true;
         await deleteLocalEdit(site.id, path).catch(() => {});
         deleteDialog.close();
-        navigate(siteHref, { replace: true });
+        back(siteHref); // The Pages list is the screen before (no extra history entry).
     });
     let isDeleted = false;
 
@@ -398,10 +400,22 @@ export async function editorScreen(container, [siteId, path]) {
         }
         publishing = true;
         $('#publish').disabled = true;
+        $('#open-delete-new')?.setAttribute('disabled', '');
         window.addEventListener('beforeunload', warnBeforeClose);
         status('Publishing. Keep the app open until this is complete.');
         await keepNow();
         try {
+            if (isNew) {
+                // GitHub refuses to create a file that exists. Also check the folder: a hand-made
+                // index.html there would make the build skip the new index.md.
+                const folder = path.slice(0, -'/index.md'.length);
+                const taken = await pathExists({ owner: site.owner, repo: site.repo, branch: site.branch, path: folder, token })
+                    .catch(err => {
+                        if (err.offline) return false; // The save below then reports no connection.
+                        throw err;
+                    });
+                if (taken) throw Object.assign(new Error('exists'), { conflict: true });
+            }
             const saved = await saveFile({
                 owner: site.owner,
                 repo: site.repo,
@@ -417,11 +431,9 @@ export async function editorScreen(container, [siteId, path]) {
             baseSha = saved.sha;
             await recordSavedPage({ site, path, sha: saved.sha, text });
             if (isNew) {
-                // From now on this is a page on GitHub, and the address cannot change.
+                // From now on this is a page on GitHub, and the address cannot change. Back still
+                // goes to the Pages list, where the user came from.
                 isNew = false;
-                backHref = pageHref;
-                $('[data-back]').setAttribute('href', pageHref);
-                $('[data-back]').setAttribute('aria-label', 'Back to the page');
                 $('#open-delete-new')?.remove();
             }
             // Keep what the user typed during Publish (keepNow deletes the kept copy only when the
@@ -448,6 +460,7 @@ export async function editorScreen(container, [siteId, path]) {
         } finally {
             publishing = false;
             $('#publish').disabled = false;
+            $('#open-delete-new')?.removeAttribute('disabled'); // Still a new page when Publish failed.
             window.removeEventListener('beforeunload', warnBeforeClose);
         }
     });
