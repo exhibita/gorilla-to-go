@@ -28,6 +28,7 @@ All decisions were made on 2026-10-17 unless a different date is shown.
 | 22 | A page is a draft when its frontmatter has `draft: true`. The string `"true"` (any case) is also a draft. GTG writes the boolean `true`. |
 | 23 | The GTG test site is the GitHub repository `exhibita/gtg-test-site`, deployed with GitHub Pages. |
 | 24 | The repository `exhibita/gorilla-to-go` is public. A GitHub Actions workflow deploys the `app/` folder to GitHub Pages on each push to `main` (decision 18, `docs/hosting.md`). |
+| 25 | The editor Preview uses a copy of `marked` (MIT), the Markdown renderer that `build.js` uses, kept inside the app and served from the app itself, so the preview renders the same as the site. Use the version the template uses (18.0.6 on 2026-10-18), and update it when the template changes. |
 
 ## Notes
 
