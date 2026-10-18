@@ -674,8 +674,10 @@ button, input, textarea { font: inherit; color: inherit; }
 
 .editor-text:focus { outline: 3px solid var(--primary); outline-offset: -1px; }
 
-.editor-preview img { max-width: 100%; }
 .preview-image { display: block; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.editor-preview img { display: block; max-width: 100%; height: auto; margin: 12px 0; border-radius: 8px; }
+.editor-preview img:not([src]) { width: 100%; min-height: 120px; background: var(--bg-2); }
+.image-thumb { display: block; max-width: 100%; max-height: 35vh; margin: 0 auto; border-radius: 8px; object-fit: contain; }
 .editor-preview table { border-collapse: collapse; }
 .editor-preview th, .editor-preview td { padding: 4px 8px; border: 1px solid var(--border); }
 .editor-preview blockquote { margin: 0; padding-left: 14px; border-left: 3px solid var(--border); color: var(--muted); }
@@ -687,7 +689,7 @@ button, input, textarea { font: inherit; color: inherit; }
     border-top: 1px solid var(--border);
     background: var(--bg-2);
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 4px;
 }
 

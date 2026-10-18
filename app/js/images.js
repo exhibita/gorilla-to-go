@@ -69,15 +69,37 @@ export function markdownImage(alt, path) {
     return `![${text}](${path})`;
 }
 
+// Put a block (for example an image line) at the cursor, as its own paragraph: blank lines before
+// and after it when needed. A selection is replaced. The cursor goes after the block.
+export function insertBlock({ text, start, end }, block) {
+    const before = text.slice(0, start);
+    const after = text.slice(end);
+    const lead = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+    const trail = after.startsWith('\n\n') ? '' : after.startsWith('\n') ? '\n' : '\n\n';
+    const inserted = `${lead}${block}${trail}`;
+    const cursor = before.length + lead.length + block.length + (after === '' ? trail.length : 0);
+    return { text: before + inserted + after, start: cursor, end: cursor };
+}
+
+// The places where the text uses this ./images/ path (not a longer name that starts with it).
+function pathPositions(text, path) {
+    const positions = [];
+    let at = text.indexOf(path);
+    while (at !== -1) {
+        if (!/^[\w.-]/.test(text.slice(at + path.length, at + path.length + 1))) positions.push(at);
+        at = text.indexOf(path, at + 1);
+    }
+    return positions;
+}
+
 // The images whose ./images/ path the text still uses. A deleted image line is not uploaded.
 export function referencedImages(text, images) {
-    return images.filter(image => {
-        const path = markdownPath(image.path);
-        let at = text.indexOf(path);
-        while (at !== -1) {
-            if (!/^[\w.-]/.test(text.slice(at + path.length, at + path.length + 1))) return true;
-            at = text.indexOf(path, at + 1);
-        }
-        return false;
-    });
+    return images.filter(image => pathPositions(text, markdownPath(image.path)).length > 0);
+}
+
+// The text with each use of the from path changed to the to path.
+export function replaceImagePath(text, from, to) {
+    let result = text;
+    for (const at of pathPositions(text, from).reverse()) result = result.slice(0, at) + to + result.slice(at + from.length);
+    return result;
 }

@@ -436,7 +436,7 @@ export async function commitFiles({ owner, repo, branch, page, images = [], mess
         const taken = toSend.find(file => onGitHub.has(file.path));
         if (taken) {
             const name = taken.path.split('/').pop();
-            throw Object.assign(new GitHubError(`An image with the name ${name} exists on GitHub.`), { imageExists: taken.path });
+            throw Object.assign(new GitHubError(`An image with the name ${name} exists on GitHub`), { imageExists: taken.path });
         }
 
         const blobs = toSend.filter(file => !uploaded.has(file.sha));
@@ -468,7 +468,18 @@ export async function commitFiles({ owner, repo, branch, page, images = [], mess
         if (updated) return { sha: pageSha };
         // 422: the branch moved after the app read it. Read it again and check again.
     }
-    throw new GitHubError('The site changed during the publish. Try again.');
+    throw new GitHubError('The site changed during the publish. Try again');
+}
+
+// The files in a folder on the branch: [{ name, path, sha }], or [] when there is no folder.
+export async function listFolder({ owner, repo, branch, path, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    try {
+        const entries = await getJson(fetch, token, `${repoPath(owner, repo)}/contents/${encodePath(path)}?ref=${encodeURIComponent(branch)}`, { signal, timeoutMs }, 'not found');
+        return Array.isArray(entries) ? entries.filter(entry => entry.type === 'file').map(({ name, path, sha }) => ({ name, path, sha })) : [];
+    } catch (err) {
+        if (err instanceof GitHubError && err.message === 'not found') return [];
+        throw err;
+    }
 }
 
 const IMAGE_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml' };

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    imageFolder, imageName, markdownPath, repoImagePath, fitSize, markdownImage, referencedImages, namesInText, MAX_WIDTH
+    imageFolder, imageName, markdownPath, repoImagePath, fitSize, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, MAX_WIDTH
 } from '../app/js/images.js';
 
 test('imageFolder puts the images of a page in src/images/<type>/<slug>/ (mvp-plan section 7)', () => {
@@ -68,4 +68,23 @@ test('referencedImages keeps only the images that the text still uses', () => {
     assert.deepEqual(referencedImages(text, images).map(i => i.path), ['src/images/blog/p/cat.jpg']);
     assert.deepEqual(referencedImages('<img src="./images/blog/p/dog.jpg" alt="">', images).map(i => i.path), ['src/images/blog/p/dog.jpg']);
     assert.deepEqual(referencedImages('', images), []);
+});
+
+test('replaceImagePath changes each use of the path, and not a longer name', () => {
+    const text = '![a](./images/blog/p/cat.jpg) ![b](./images/blog/p/cat.jpg2)\n<img src="./images/blog/p/cat.jpg">';
+    assert.equal(
+        replaceImagePath(text, './images/blog/p/cat.jpg', './images/blog/p/cat-2.jpg'),
+        '![a](./images/blog/p/cat-2.jpg) ![b](./images/blog/p/cat.jpg2)\n<img src="./images/blog/p/cat-2.jpg">'
+    );
+});
+
+test('insertBlock puts the image line in its own paragraph at the cursor', () => {
+    const img = '![a](./x.jpg)';
+    assert.deepEqual(insertBlock({ text: '', start: 0, end: 0 }, img), { text: `${img}\n\n`, start: img.length + 2, end: img.length + 2 });
+    const mid = insertBlock({ text: 'Hello world', start: 5, end: 5 }, img);
+    assert.equal(mid.text, `Hello\n\n${img}\n\n world`);
+    assert.equal(mid.start, 'Hello\n\n'.length + img.length);
+    assert.equal(insertBlock({ text: 'One\n\nTwo', start: 5, end: 5 }, img).text, `One\n\n${img}\n\nTwo`);
+    assert.equal(insertBlock({ text: 'One\n', start: 4, end: 4 }, img).text, `One\n\n${img}\n\n`);
+    assert.equal(insertBlock({ text: 'Replace THIS now', start: 8, end: 12 }, img).text, `Replace \n\n${img}\n\n now`);
 });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { commitFiles, gitBlobSha, getImageDataUrl } from '../app/js/github.js';
+import { commitFiles, gitBlobSha, getImageDataUrl, listFolder } from '../app/js/github.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -220,6 +220,21 @@ test('commitFiles reports a refused token and no write access', async () => {
     const { fetch } = fakeGitHub();
     const readOnly = async (url, init = {}) => (init.method === 'POST' ? json(403, {}) : fetch(url, init));
     await assert.rejects(commitFiles(args(readOnly)), { message: 'No write access' });
+});
+
+test('listFolder gives the files in a folder, and no files when there is no folder', async () => {
+    const routes = {
+        [`${API}${REPO}/contents/src/images/blog/p?ref=main`]: () => json(200, [
+            { type: 'file', name: 'cat.jpg', path: CAT_PATH, sha: 'S1' },
+            { type: 'dir', name: 'old', path: 'src/images/blog/p/old', sha: 'S2' }
+        ]),
+        [`${API}${REPO}/contents/src/images/blog/none?ref=main`]: () => json(404, {})
+    };
+    const routed = async url => routes[url]();
+    const base = { owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch: routed };
+    assert.deepEqual(await listFolder({ ...base, path: 'src/images/blog/p' }), [{ name: 'cat.jpg', path: CAT_PATH, sha: 'S1' }]);
+    assert.deepEqual(await listFolder({ ...base, path: 'src/images/blog/none' }), []);
+    await assert.rejects(listFolder({ ...base, path: 'x', fetch: async () => { throw new TypeError('Failed to fetch'); } }), err => err.offline === true);
 });
 
 test('getImageDataUrl reads the file bytes from GitHub and makes a data: URL', async () => {
