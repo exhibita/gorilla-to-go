@@ -2,6 +2,7 @@
 import * as db from './db.js';
 import { saveToken, deleteToken } from './auth.js';
 import { findDuplicate } from './sites-logic.js';
+import { deviceStore } from './pages.js';
 
 const LAST_SITE_KEY = 'gtg.lastSite';
 
@@ -44,6 +45,13 @@ export async function removeSite(id) {
     await deleteToken(id);
     await db.remove('sites', id);
     if (getLastSiteId() === id) setLastSiteId(null);
+    // The saved page list and page texts of the site. A failure here does not stop the removal.
+    try {
+        await deviceStore.deletePageList(id);
+        await deviceStore.pruneBlobs();
+    } catch {
+        // The next page list load prunes again.
+    }
 }
 
 // The last site the user opened (localStorage can be unavailable, for example in a private window).

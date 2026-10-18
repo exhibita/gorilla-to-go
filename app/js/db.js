@@ -1,7 +1,9 @@
-// IndexedDB storage. Stores: "sites" (key "id") and "tokens" (key "siteId").
-// Only sites.js and auth.js use this module. Nothing here runs until a function is called.
+// IndexedDB storage. Stores: "sites" (key "id"), "tokens" (key "siteId"), and the page cache:
+// "pageLists" (key "siteId") and "blobs" (key "sha"). Only sites.js, auth.js and pages.js use this
+// module. Nothing here runs until a function is called.
 const DB_NAME = 'gtg';
-const DB_VERSION = 1;
+// Version 2 adds the page cache stores. The upgrade keeps the sites and tokens of version 1.
+const DB_VERSION = 2;
 
 let dbPromise;
 
@@ -12,6 +14,8 @@ function openDb() {
             const db = request.result;
             if (!db.objectStoreNames.contains('sites')) db.createObjectStore('sites', { keyPath: 'id' });
             if (!db.objectStoreNames.contains('tokens')) db.createObjectStore('tokens', { keyPath: 'siteId' });
+            if (!db.objectStoreNames.contains('pageLists')) db.createObjectStore('pageLists', { keyPath: 'siteId' });
+            if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs', { keyPath: 'sha' });
         };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => {
@@ -35,6 +39,7 @@ async function run(storeName, mode, makeRequest) {
 }
 
 export const getAll = storeName => run(storeName, 'readonly', store => store.getAll());
+export const getAllKeys = storeName => run(storeName, 'readonly', store => store.getAllKeys());
 export const get = (storeName, key) => run(storeName, 'readonly', store => store.get(key));
 export const put = (storeName, value) => run(storeName, 'readwrite', store => store.put(value));
 export const remove = (storeName, key) => run(storeName, 'readwrite', store => store.delete(key));

@@ -203,11 +203,13 @@ async function getJson(fetch, token, path, net, notFoundMessage) {
 
 // The Markdown pages of the branch: two requests (branch → tree SHA → whole tree).
 // Returns { treeSha, truncated, files: [{ path, sha }] }. The tree SHA changes when any file changes.
-export async function listMarkdownFiles({ owner, repo, branch, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+// When knownTreeSha equals the current tree SHA, the tree is not read again: returns { treeSha, unchanged: true }.
+export async function listMarkdownFiles({ owner, repo, branch, token, fetch = globalThis.fetch, signal, timeoutMs, knownTreeSha }) {
     const net = { signal, timeoutMs };
     const base = repoPath(owner, repo);
     const branchData = await getJson(fetch, token, `${base}/branches/${encodeURIComponent(branch)}`, net, `Branch ${branch} not found`);
     const treeSha = branchData.commit.commit.tree.sha;
+    if (knownTreeSha && treeSha === knownTreeSha) return { treeSha, unchanged: true };
     const tree = await getJson(fetch, token, `${base}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`, net, 'Repository not found');
     const files = tree.tree
         .filter(entry => entry.type === 'blob' && classifyPath(entry.path))

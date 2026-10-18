@@ -30,6 +30,7 @@ const ASSETS = [
     'js/frontmatter.js',
     'js/github.js',
     'js/pages-logic.js',
+    'js/pages.js',
     'js/router.js',
     'js/screens/add-site.js',
     'js/screens/help.js',
