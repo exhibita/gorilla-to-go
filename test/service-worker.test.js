@@ -8,7 +8,8 @@ const sw = fs.readFileSync(path.join(APP, 'sw.js'), 'utf8');
 const assets = JSON.parse(sw.match(/const ASSETS = (\[[\s\S]*?\]);/)[1].replace(/'/g, '"').replace(/,\s*\]/, ']'));
 
 test('the service worker precaches every app file, so the app opens offline', () => {
-    const files = appFiles().filter(f => f !== 'sw.js');
+    // CNAME is for GitHub Pages only. The app does not load it.
+    const files = appFiles().filter(f => f !== 'sw.js' && f !== 'CNAME');
     for (const file of files) {
         assert.ok(assets.includes(file), `${file} is not in ASSETS in sw.js`);
     }
