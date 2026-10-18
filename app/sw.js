@@ -27,6 +27,7 @@ const ASSETS = [
     'js/auth.js',
     'js/db.js',
     'js/dom.js',
+    'js/frontmatter-write.js',
     'js/frontmatter.js',
     'js/github.js',
     'js/pages-logic.js',
