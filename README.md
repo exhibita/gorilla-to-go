@@ -27,7 +27,7 @@ To test on a phone, the app needs HTTPS:
 2. In a second terminal, run `ngrok http 5173`.
 3. On the phone, open the HTTPS address that ngrok shows.
 
-Only the `app/` folder is published. GitHub Pages hosts it at https://gtg.exhibita.com. See [docs/hosting.md](docs/hosting.md).
+Only the `app/` folder is published. GitHub Pages hosts it at https://gorillatogo.app. See [docs/hosting.md](docs/hosting.md).
 
 ## Documents
 

@@ -85,6 +85,10 @@ Step 1 is done (2026-10-17): template version 2 is merged, and the test site is 
 
 Template version 2.1 is done (2026-10-18, vanilla-gorilla#4). The build skips a page with front matter that is not valid YAML and shows a warning, so one bad page no longer stops the deploy. It also fixes the minor findings from the version 2 review. The test site runs version 2.1.
 
+### Before go-live
+
+- **Install as app:** an "Install as app" link in the app opens a help page inside the PWA (it must work offline, as decision 16 says for the other help pages). The text comes from `docs/install-app.md` and its images from `docs/img/install/`. The user is still editing these files. Keep them out of commits until the user says the guide is ready.
+
 ## 9. Risks
 
 - **Edit conflicts:** a page can change on GitHub during an edit. The app must find this and stop, so it does not overwrite the other change.
