@@ -21,7 +21,7 @@ All decisions were made on 2026-10-17 unless a different date is shown.
 | 15 | The "Add a site" checks run automatically after the token is entered. |
 | 16 | The token instructions and the template upgrade instructions are pages inside the PWA. They must work offline. |
 | 17 | License: AGPL-3.0 (changed from GPL-3.0 on 2026-10-17). |
-| 18 | GTG is hosted at gtg.exhibita.com. |
+| 18 | GTG is hosted at gorillatogo.app (changed from gtg.exhibita.com on 2026-10-18). |
 | 19 | GTG uses semantic versioning (MAJOR.MINOR.PATCH), starting at 0.1.0. |
 | 20 | Local development uses a dev server (for example Vite) and ngrok for HTTPS on the phone. |
 | 21 | Each entry in the gallery `images:` list has the fields `path`, `alt` and `caption`. `path` starts with `./` and is relative to `src/`, for example `./images/gallery/<slug>/photo.jpg`. GTG writes `./images/...` paths in Markdown text too. |

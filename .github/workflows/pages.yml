@@ -1,4 +1,4 @@
-# Deploys Gorilla To Go to GitHub Pages (gtg.exhibita.com).
+# Deploys Gorilla To Go to GitHub Pages (gorillatogo.app).
 # Runs on each push to main. Only the app/ folder is published.
 # The custom domain is set in Settings > Pages, not by app/CNAME (see docs/hosting.md).
 name: Deploy to GitHub Pages
