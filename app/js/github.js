@@ -66,6 +66,7 @@ export async function getTemplateVersion({ owner, repo, branch, token, fetch = g
     } catch {
         return { ok: false, label: 'No connection to GitHub' };
     }
+    if (response.status === 401) return { ok: false, label: 'Token not accepted' };
     if (response.status === 404) return { ok: false, label: 'Not a Vanilla Gorilla site (no package.json)' };
     if (!response.ok) return { ok: false, label: `GitHub error ${response.status}` };
     try {

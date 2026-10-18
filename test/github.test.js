@@ -206,3 +206,9 @@ test('getTemplateVersion decodes UTF-8 text in package.json', async () => {
     const { fetch } = fakeFetch(routes);
     assert.deepEqual(await getTemplateVersion({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch }), { ok: true, version: 3 });
 });
+
+test('getTemplateVersion reports a token that GitHub no longer accepts', async () => {
+    const routes = { [`GET ${REPO}/contents/package.json?ref=main`]: () => json(401, { message: 'Bad credentials' }) };
+    const { fetch } = fakeFetch(routes);
+    assert.deepEqual(await getTemplateVersion({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch }), { ok: false, label: 'Token not accepted' });
+});
