@@ -23,6 +23,10 @@ function bindDelete({ container, site, path, entry, slug, token, siteHref }) {
     dialog.querySelector('[data-close]').addEventListener('click', () => {
         if (!deleting) dialog.close();
     });
+    // Escape and the Android back gesture also close a dialog: not while the delete runs.
+    dialog.addEventListener('cancel', event => {
+        if (deleting) event.preventDefault();
+    });
     $('#open-delete-page').addEventListener('click', () => {
         $('#delete-error').textContent = '';
         $('#delete-status').textContent = '';
@@ -48,8 +52,11 @@ function bindDelete({ container, site, path, entry, slug, token, siteHref }) {
             await recordDeletedPage({ site, path }).catch(() => {});
             await deleteLocalEdit(site.id, path).catch(() => {});
             forgetList(site.id);
-            dialog.close();
-            back(siteHref);
+            // Only when this page view is still open: the user can have opened another screen meanwhile.
+            if (container.isConnected) {
+                dialog.close();
+                back(siteHref);
+            }
         } catch (err) {
             $('#delete-status').textContent = '';
             $('#delete-error').textContent = err.conflict

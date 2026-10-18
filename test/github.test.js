@@ -440,14 +440,33 @@ test('deleteFile: a page that is already gone counts as deleted', async () => {
     for (const status of [404, 409]) {
         const { fetch } = fakeFetch({
             [`DELETE ${FILE}`]: () => json(status, {}),
-            [`GET ${FILE}?ref=main`]: () => json(404, {})
+            [`GET ${FILE}?ref=main`]: () => json(404, {}),
+            [`GET ${REPO}/branches/main`]: () => json(200, {})
         });
         await deleteFile({ ...deleteArgs, fetch });
     }
 });
 
+test('deleteFile: "not found" with a branch that cannot be read is an error, not a delete', async () => {
+    // The token lost access, or the branch was renamed: GitHub then says "not found" for the file too.
+    const { fetch } = fakeFetch({
+        [`DELETE ${FILE}`]: () => json(404, {}),
+        [`GET ${FILE}?ref=main`]: () => json(404, {}),
+        [`GET ${REPO}/branches/main`]: () => json(404, {})
+    });
+    await assert.rejects(deleteFile({ ...deleteArgs, fetch }), err => !err.conflict && /Branch main not found|No write access/.test(err.message));
+});
+
+test('deleteFile: a refusal when the check cannot reach GitHub says "No connection"', async () => {
+    const fetch = async (url, init = {}) => {
+        if (init.method === 'DELETE') return json(404, {});
+        throw new TypeError('Failed to fetch');
+    };
+    await assert.rejects(deleteFile({ ...deleteArgs, fetch }), err => err.offline === true);
+});
+
 test('deleteFile: a delete that timed out but reached GitHub is a success', async () => {
-    const routes = { [`GET ${FILE}?ref=main`]: () => json(404, {}) };
+    const routes = { [`GET ${FILE}?ref=main`]: () => json(404, {}), [`GET ${REPO}/branches/main`]: () => json(200, {}) };
     const fetch = async (url, init = {}) => {
         if (init.method === 'DELETE') throw new TypeError('Failed to fetch');
         return routes[`GET ${url.replace(API, '')}`]();

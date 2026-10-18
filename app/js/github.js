@@ -304,14 +304,27 @@ export async function deleteFile({ owner, repo, branch, path, sha, message, toke
     const filePath = String(path).split('/').map(encodeURIComponent).join('/');
     const contentsPath = `${repoPath(owner, repo)}/contents/${filePath}`;
 
-    // { gone: true }, { sha } of the file now, or null when the app cannot tell.
+    // { gone: true }, { sha } of the file now, { offline: true }, or null when the app cannot tell.
     const fileNow = async () => {
+        const net = { signal, timeoutMs };
         try {
-            const file = await getJson(fetch, token, `${contentsPath}?ref=${encodeURIComponent(branch)}`, { signal, timeoutMs }, 'gone');
+            const file = await getJson(fetch, token, `${contentsPath}?ref=${encodeURIComponent(branch)}`, net, 'gone');
             return { sha: file.sha };
         } catch (err) {
             if (err instanceof CancelledError) throw err;
-            return err instanceof GitHubError && err.message === 'gone' ? { gone: true } : null;
+            if (err.offline) return { offline: true };
+            if (!(err instanceof GitHubError && err.message === 'gone')) return null;
+        }
+        // "Not found" also comes when the token lost access or the branch is gone. The file is gone
+        // only when the branch can still be read.
+        try {
+            await getJson(fetch, token, `${repoPath(owner, repo)}/branches/${encodeURIComponent(branch)}`, net, 'no branch');
+            return { gone: true };
+        } catch (err) {
+            if (err instanceof CancelledError) throw err;
+            if (err.offline) return { offline: true };
+            if (err.message === 'no branch') return { noBranch: true };
+            return null;
         }
     };
 
@@ -328,7 +341,9 @@ export async function deleteFile({ owner, repo, branch, path, sha, message, toke
 
     const now = await fileNow();
     if (now?.gone) return;
-    if ((response.status === 409 || response.status === 422) && now && now.sha !== sha) {
+    if (now?.offline) throw new GitHubError('No connection to GitHub', { offline: true });
+    if (now?.noBranch) throw new GitHubError(`Branch ${branch} not found`);
+    if ((response.status === 409 || response.status === 422) && now?.sha && now.sha !== sha) {
         throw Object.assign(new GitHubError('This page changed on GitHub after you opened it.'), { conflict: true });
     }
     if (response.status === 403 || response.status === 404) throw new GitHubError('No write access');
