@@ -2,19 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { ROOT, APP, appFiles } from './helpers.js';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const APP = path.join(ROOT, 'app');
 const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
-
-// Every file under app/, as a path relative to app/ with forward slashes.
-export function appFiles(dir = APP) {
-    return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
-        const full = path.join(dir, entry.name);
-        return entry.isDirectory() ? appFiles(full) : [path.relative(APP, full).replace(/\\/g, '/')];
-    });
-}
 
 test('VERSION in app/js/version.js equals the package.json version', async () => {
     const pkg = JSON.parse(read('package.json'));
