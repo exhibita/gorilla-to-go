@@ -21,6 +21,7 @@
 - **Drafts:** the build skips a page that has `draft: true` in its frontmatter. Drafts are saved in GitHub, not only on the phone.
 - **Galleries:** an `images:` list in the frontmatter, with a path, alt text and caption for each image. The gallery skeleton makes the grid and the lightbox from this list.
 - **Version marker:** `"vanillaGorilla": { "templateVersion": 2 }` in `package.json`.
+- **License:** we need to add `"license": "AGPL-3.0-or-later"` in `package.json`.
 
 ## 4. Version check
 
@@ -80,9 +81,14 @@ Rules:
 9. Add drafts and publish status.
 10. Optional: replace the textarea with CodeMirror 6.
 
+Step 1 is done (2026-10-17): template version 2 is merged, and the test site is `exhibita/gtg-test-site`.
+
+Template version 2.1 is done (2026-10-18, vanilla-gorilla#4). The build skips a page with front matter that is not valid YAML and shows a warning, so one bad page no longer stops the deploy. It also fixes the minor findings from the version 2 review. The test site runs version 2.1.
+
 ## 9. Risks
 
 - **Edit conflicts:** a page can change on GitHub during an edit. The app must find this and stop, so it does not overwrite the other change.
 - **iOS storage:** iOS can delete local data. Save drafts to GitHub often.
 - **iOS install:** iOS has no install prompt. The user must tap Share, then Add to Home Screen.
 - **No background work on iOS:** the app must stay open until a commit is complete.
+- **Invalid front matter:** with template version 2.1, the build skips a page with front matter that is not valid YAML, so that page is not published. The app must always write valid YAML and put text values in quotes.
