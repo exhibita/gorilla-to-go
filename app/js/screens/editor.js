@@ -259,7 +259,16 @@ export async function editorScreen(container, [siteId, path]) {
                 await deleteLocalEdit(site.id, path);
             } else {
                 // Only the photos that the text still uses are kept.
-                await saveLocalEdit({ siteId: site.id, path, baseSha, text, images: referencedImages(text, pendingImages) });
+                const images = referencedImages(text, pendingImages);
+                try {
+                    await saveLocalEdit({ siteId: site.id, path, baseSha, text, images });
+                } catch (err) {
+                    // For example the device storage is full: keep at least the text.
+                    if (!images.length) throw err;
+                    await saveLocalEdit({ siteId: site.id, path, baseSha, text });
+                    status('The app cannot keep the images on this device. Your text is kept. Publish soon.');
+                    return;
+                }
                 status(`Not published. Your changes are kept on this device (${listTimeText(Date.now())}).`);
             }
         } catch {
@@ -331,8 +340,10 @@ export async function editorScreen(container, [siteId, path]) {
         button.addEventListener('pointerdown', event => event.preventDefault());
         button.addEventListener('click', () => {
             if (button.dataset.tool === 'image') {
+                // One photo at a time, and not during Publish.
+                if (preparing || publishing) return;
                 // Remember where the image goes: the file picker takes the focus.
-                imageSelection = { start: textarea.selectionStart, end: textarea.selectionEnd };
+                imageSelection = { start: textarea.selectionStart, end: textarea.selectionEnd, text: textarea.value };
                 fileInput.click();
                 return;
             }
@@ -353,8 +364,10 @@ export async function editorScreen(container, [siteId, path]) {
     // ----- Images (mvp-plan section 7) -----
     const fileInput = $('#image-file');
     const imageSheet = $('#image-sheet');
-    let imageSelection = { start: 0, end: 0 };
-    let newImage = null; // The photo in the sheet: { path, base64, mimeType }.
+    let imageSelection = { start: 0, end: 0, text: '' };
+    let newImage = null; // The photo in the sheet: { fileName, extension, base64, mimeType }.
+    let preparing = false; // A photo is being made ready. Publish waits.
+    let githubNames = []; // The file names in the image folder on GitHub, read when the photo was picked.
     let altAsked = false;
 
     // The file names in the image folder of this page on GitHub. None when the app cannot read them
@@ -368,22 +381,28 @@ export async function editorScreen(container, [siteId, path]) {
         }
     };
     const pendingNames = () => pendingImages.filter(image => image.path.startsWith(folder)).map(image => image.path.slice(folder.length));
+    // A name that the text, another photo of this page and GitHub do not use.
+    const freeName = (fileName, extension) => imageName(fileName, extension, [...namesInText(currentText(), folder), ...pendingNames(), ...githubNames]);
 
     fileInput.addEventListener('change', async () => {
         const file = fileInput.files[0];
         fileInput.value = ''; // The same photo can be picked again.
         if (!file) return;
         status('Making the image ready.');
+        preparing = true;
         let prepared;
         try {
             prepared = await prepareImage(file);
+            githubNames = await namesOnGitHub();
         } catch (err) {
             status(err instanceof ImageError ? err.message : 'The app cannot read this image. Use a JPEG or PNG.');
             return;
+        } finally {
+            preparing = false;
         }
-        const taken = [...namesInText(currentText(), folder), ...pendingNames(), ...await namesOnGitHub()];
-        const name = imageName(file.name, prepared.extension, taken);
-        newImage = { path: folder + name, base64: prepared.base64, mimeType: prepared.mimeType };
+        if (!imageSheet.isConnected) return; // The user left the editor.
+        newImage = { fileName: file.name, extension: prepared.extension, base64: prepared.base64, mimeType: prepared.mimeType };
+        const name = freeName(file.name, prepared.extension);
         $('#image-thumb').src = dataUrl(newImage);
         $('#image-info').textContent = `${name}, ${prepared.width} × ${prepared.height} px, ${sizeText(prepared.size)}`;
         $('#image-alt').value = '';
@@ -407,12 +426,15 @@ export async function editorScreen(container, [siteId, path]) {
             $('#image-alt').focus();
             return;
         }
-        const image = newImage;
-        pendingImages = [...pendingImages.filter(other => other.path !== image.path), image];
+        // Choose the name again now: the text and the other photos can have changed since the pick.
+        const image = { path: folder + freeName(newImage.fileName, newImage.extension), base64: newImage.base64, mimeType: newImage.mimeType };
+        pendingImages = [...pendingImages, image];
         imageSheet.close();
         clearTimeout(historyTimer);
         remember();
-        apply(insertBlock({ text: textarea.value, ...imageSelection }, markdownImage(alt, markdownPath(image.path))));
+        // When the text changed after the tap on the image button, the image goes at the cursor now.
+        const where = textarea.value === imageSelection.text ? imageSelection : { start: textarea.selectionStart, end: textarea.selectionEnd };
+        apply(insertBlock({ text: textarea.value, start: where.start, end: where.end }, markdownImage(alt, markdownPath(image.path))));
         remember();
         keepNow(); // Keep the photo on the device at once.
     });
@@ -520,20 +542,26 @@ export async function editorScreen(container, [siteId, path]) {
 
     // A photo whose name another file uses on GitHub gets a new name: in one commit, a file with the
     // same path replaces the other file. (A photo added offline was not checked.) The same photo,
-    // for example from a publish that timed out, keeps its name.
+    // for example from a publish that timed out, keeps its name. Letter case does not matter.
+    // Returns a note for the user, or ''.
     const renameTakenImages = async () => {
         const onGitHub = await listFolder({ owner: site.owner, repo: site.repo, branch: site.branch, path: folder.slice(0, -1), token });
+        const notes = [];
         for (const image of referencedImages(currentText(), pendingImages)) {
-            const there = onGitHub.find(file => file.path === image.path);
-            if (!there || there.sha === await gitBlobSha(base64ToBytes(image.base64))) continue;
+            const there = onGitHub.find(file => file.path.toLowerCase() === image.path.toLowerCase());
+            if (!there || (there.path === image.path && there.sha === await gitBlobSha(base64ToBytes(image.base64)))) continue;
             const oldName = image.path.slice(folder.length);
             const taken = [...onGitHub.map(file => file.name), ...namesInText(currentText(), folder), ...pendingNames()];
             const name = imageName(oldName, oldName.split('.').pop(), taken);
             textarea.value = replaceImagePath(textarea.value, markdownPath(image.path), markdownPath(folder + name));
             image.path = folder + name;
-            remember();
-            status(`A file with the name ${oldName} exists on GitHub. The app changed the image name to ${name}.`);
+            notes.push(`A file with the name ${oldName} exists on GitHub, so the app changed the image name to ${name}.`);
         }
+        if (!notes.length) return '';
+        // Undo must not bring back the old name: that name is the other file on GitHub now.
+        history = createHistory({ text: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd });
+        await keepNow();
+        return notes.join(' ');
     };
 
     let publishing = false;
@@ -547,10 +575,15 @@ export async function editorScreen(container, [siteId, path]) {
             status('The page needs a title. Tap Details and type a title.');
             return;
         }
+        if (preparing) {
+            status('Wait until the image is ready, then tap Publish.');
+            return;
+        }
         if (currentText() === originalText) {
             status('There are no changes to publish.');
             return;
         }
+        let renameNote = '';
         publishing = true;
         $('#publish').disabled = true;
         $('#open-delete-new')?.setAttribute('disabled', '');
@@ -569,7 +602,7 @@ export async function editorScreen(container, [siteId, path]) {
                     });
                 if (taken) throw Object.assign(new Error('exists'), { conflict: true });
             }
-            if (referencedImages(currentText(), pendingImages).length) await renameTakenImages();
+            if (referencedImages(currentText(), pendingImages).length) renameNote = await renameTakenImages();
             const text = currentText();
             const images = referencedImages(text, pendingImages);
             const message = `${isNew ? 'Add' : 'Edit'} ${kind.slug} with Gorilla To Go`;
@@ -635,6 +668,8 @@ export async function editorScreen(container, [siteId, path]) {
                 status(`Not published: ${err.message}. Your changes are kept on this device.`);
             }
         } finally {
+            // The rename note stays on the screen after the result of the publish.
+            if (renameNote) status(`${$('#editor-status').textContent} ${renameNote}`);
             publishing = false;
             $('#publish').disabled = false;
             $('#open-delete-new')?.removeAttribute('disabled'); // Still a new page when Publish failed.

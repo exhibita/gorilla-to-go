@@ -78,6 +78,21 @@ test('replaceImagePath changes each use of the path, and not a longer name', () 
     );
 });
 
+test('markdownPath encodes a folder with a space or parentheses, and repoImagePath reads it back', () => {
+    const path = 'src/images/page/docs/My Page (old)/x.jpg';
+    assert.equal(markdownPath(path), './images/page/docs/My%20Page%20%28old%29/x.jpg');
+    assert.equal(repoImagePath(markdownPath(path)), path);
+});
+
+test('referencedImages and replaceImagePath ignore ../images/ and other paths that end with the path', () => {
+    const images = [{ path: 'src/images/blog/p/cat.jpg' }];
+    assert.deepEqual(referencedImages('![a](../images/blog/p/cat.jpg) x./images/blog/p/cat.jpg', images), []);
+    assert.equal(
+        replaceImagePath('![a](../images/blog/p/cat.jpg) ![b](./images/blog/p/cat.jpg)', './images/blog/p/cat.jpg', './images/blog/p/cat-2.jpg'),
+        '![a](../images/blog/p/cat.jpg) ![b](./images/blog/p/cat-2.jpg)'
+    );
+});
+
 test('insertBlock puts the image line in its own paragraph at the cursor', () => {
     const img = '![a](./x.jpg)';
     assert.deepEqual(insertBlock({ text: '', start: 0, end: 0 }, img), { text: `${img}\n\n`, start: img.length + 2, end: img.length + 2 });

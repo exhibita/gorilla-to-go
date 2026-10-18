@@ -30,12 +30,13 @@ export async function prepareImage(file) {
     } catch {
         throw new ImageError('This image format is not supported. Use a JPEG or PNG.');
     }
+    const canvas = document.createElement('canvas');
     try {
         const { width, height } = fitSize(bitmap.width, bitmap.height);
-        const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const context = canvas.getContext('2d');
+        if (!context) throw new ImageError('The app cannot make a copy of this image. Close and open the app, then try again.');
         const png = type === 'image/png';
         if (!png) {
             // JPEG has no transparency: a transparent part becomes white, not black.
@@ -51,5 +52,8 @@ export async function prepareImage(file) {
         return { base64: bytesToBase64(bytes), mimeType: blob.type, extension: png ? 'png' : 'jpg', width, height, size: bytes.length };
     } finally {
         bitmap.close?.();
+        // Free the canvas memory at once: iOS has a small limit for all canvases together.
+        canvas.width = 0;
+        canvas.height = 0;
     }
 }

@@ -15,8 +15,11 @@ export function imageFolder(pagePath) {
 }
 
 // src/images/... → ./images/... (the path in the Markdown; build.js rewrites ./ for the page depth).
+// Each part is encoded, so a folder with a space or a parenthesis (a hand-made page) still gives a
+// Markdown image.
 export function markdownPath(repoPath) {
-    return `./${repoPath.slice('src/'.length)}`;
+    const encode = part => encodeURIComponent(part).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+    return `./${repoPath.slice('src/'.length).split('/').map(encode).join('/')}`;
 }
 
 // ./images/... in the page → src/images/..., or null for any other address.
@@ -81,12 +84,15 @@ export function insertBlock({ text, start, end }, block) {
     return { text: before + inserted + after, start: cursor, end: cursor };
 }
 
-// The places where the text uses this ./images/ path (not a longer name that starts with it).
+// The places where the text uses this ./images/ path: not a longer name that starts with it, and not
+// a path that ends with it (for example ../images/...).
 function pathPositions(text, path) {
     const positions = [];
     let at = text.indexOf(path);
     while (at !== -1) {
-        if (!/^[\w.-]/.test(text.slice(at + path.length, at + path.length + 1))) positions.push(at);
+        const before = at === 0 ? '' : text[at - 1];
+        const after = text.slice(at + path.length, at + path.length + 1);
+        if (!/^[\w./%-]/.test(before) && !/^[\w.-]/.test(after)) positions.push(at);
         at = text.indexOf(path, at + 1);
     }
     return positions;

@@ -389,7 +389,7 @@ export async function commitFiles({ owner, repo, branch, page, images = [], mess
     const files = await Promise.all(images.map(async image => ({ ...image, sha: await gitBlobSha(base64ToBytes(image.base64)) })));
     const uploaded = new Map(); // Local SHA → SHA from GitHub, for the images sent in this publish.
 
-    // A POST or PATCH. Returns the JSON answer, or null when GitHub refuses a ref update (422).
+    // A POST or PATCH. Returns the JSON answer, or { refused: message } when GitHub refuses a ref update (422).
     const send = async (method, path, body, options = {}) => {
         let response;
         try {
@@ -399,7 +399,7 @@ export async function commitFiles({ owner, repo, branch, page, images = [], mess
             throw new GitHubError('No connection to GitHub', { offline: true });
         }
         if (response.status === 401) throw new GitHubError('Token not accepted');
-        if (response.status === 422 && method === 'PATCH') return null;
+        if (response.status === 422 && method === 'PATCH') return { refused: (await response.json().catch(() => ({}))).message ?? 'GitHub error 422' };
         if (response.status === 403 || response.status === 404) throw new GitHubError('No write access');
         if (!response.ok) throw new GitHubError(`GitHub error ${response.status}`);
         return response.json();
@@ -415,7 +415,9 @@ export async function commitFiles({ owner, repo, branch, page, images = [], mess
         }
     };
 
+    let timedOut = false;
     for (let attempt = 1; attempt <= MAX_COMMIT_TRIES; attempt++) {
+        timedOut = false;
         const commitSha = await readRef();
         const commit = await getJson(fetch, token, `${base}/git/commits/${encodeURIComponent(commitSha)}`, net, 'Repository not found');
 
@@ -433,7 +435,9 @@ export async function commitFiles({ owner, repo, branch, page, images = [], mess
         if (pageNow !== (page.baseSha ?? null) && pageNow !== pageSha) {
             throw Object.assign(new GitHubError('This page changed on GitHub after you opened it.'), { conflict: true });
         }
-        const taken = toSend.find(file => onGitHub.has(file.path));
+        // Letter case does not matter: Cat.jpg and cat.jpg are one file on Windows and macOS.
+        const pathsOnGitHub = [...onGitHub.keys()].map(p => p.toLowerCase());
+        const taken = toSend.find(file => pathsOnGitHub.includes(file.path.toLowerCase()));
         if (taken) {
             const name = taken.path.split('/').pop();
             throw Object.assign(new GitHubError(`An image with the name ${name} exists on GitHub`), { imageExists: taken.path });
@@ -463,11 +467,15 @@ export async function commitFiles({ owner, repo, branch, page, images = [], mess
             if (!err.offline) throw err;
             // No answer: the update can still have reached GitHub. When the branch has the commit, it did.
             if (await readRef() === newCommit.sha) return { sha: pageSha };
+            timedOut = true;
             continue;
         }
-        if (updated) return { sha: pageSha };
-        // 422: the branch moved after the app read it. Read it again and check again.
+        if (!updated.refused) return { sha: pageSha };
+        // 422: usually the branch moved after the app read it: read it again and check again. When the
+        // branch did not move, GitHub refused for another reason (for example a branch rule).
+        if (await readRef() === commitSha) throw new GitHubError(`GitHub refused the publish: ${updated.refused}`);
     }
+    if (timedOut) throw new GitHubError('No connection to GitHub', { offline: true });
     throw new GitHubError('The site changed during the publish. Try again');
 }
 

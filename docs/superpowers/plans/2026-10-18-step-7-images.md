@@ -11,7 +11,7 @@
 - Images of a page go in `src/images/<type>/<slug>/` (type from the page path: blog, gallery, page). The Markdown uses `./images/<type>/<slug>/<name>` (decision 21), the only prefix that `build.js` rewrites for the page depth.
 - **Always re-encode** with a canvas: width at most 1600 px, and the copy has no EXIF data (no GPS location). `createImageBitmap(file, { imageOrientation: 'from-image' })` keeps the rotation. JPEG (quality 0.85) for photos; PNG when the source is PNG. GIF (animation) and SVG (active content) are refused with a message. A format the browser cannot decode (for example HEIC on Android) gets "This image format is not supported. Use a JPEG or PNG."
 - Alt text: asked in a sheet before the insert ("Describe the image for people who cannot see it"). Strongly asked for, not forced.
-- File names: from the original name (slug), with a `-2`, `-3` suffix when the name is used in the page text, by another pending image, or (online) on GitHub. At Publish, each image is checked on GitHub again; a name that exists stops the publish with a message (a Git tree entry overwrites without a warning).
+- File names: from the original name (slug), with a `-2`, `-3` suffix when the name is used in the page text, by another pending image, or (online) on GitHub. At Publish, each image is checked on GitHub again (letter case does not matter): a photo whose name another file uses gets a new name, and the app says so. `commitFiles` also refuses to replace a file, because a Git tree entry overwrites without a warning.
 - Pending images are kept with the page's unsaved changes on the device (the `edits` record, base64 strings), so Restore, Discard, Delete and Remove site already cover them.
 - Only images that the text still references are uploaded.
 - **One commit** for the page and its images (Git Data API): ref → commit → tree; check that the page's current SHA in that tree is the SHA the user opened (or that a new page does not exist); blobs; tree on that base; commit; update the ref with `force: false`. If the branch moved meanwhile (422), do the whole check again (at most 3 times). After a time-out on the ref update, read the ref: when it points at the new commit, the publish succeeded.
@@ -23,7 +23,7 @@
 ## Review Focus
 
 1. **The branch moves during the commit** — the app checks again and never overwrites a newer page. Test: ref update 422 → retry.
-2. **An image name that exists on GitHub** — a new name at insert, a stop at Publish; never an overwrite. Tests: `imageName`; publish check.
+2. **An image name that exists on GitHub** — a new name at insert and at Publish; never an overwrite. Tests: `imageName`; publish check.
 3. **A deleted image line** — its file is not uploaded. Test: `referencedImages`.
 4. **A big photo** (for example 20 MB) — it is made smaller; a decode failure gives a message, not a broken page.
 5. **App closed with pending images** — Restore brings back the text and the images.

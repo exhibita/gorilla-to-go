@@ -180,6 +180,23 @@ test('commitFiles gives up when the branch keeps moving', async () => {
     assert.equal(posts(state).filter(c => c.method === 'PATCH').length, 3);
 });
 
+test('commitFiles: a refusal while the branch did not move gives the reason from GitHub, with no retry', async () => {
+    const { state, fetch } = fakeGitHub();
+    const ruled = async (url, init = {}) => (init.method === 'PATCH'
+        ? (state.calls.push({ method: 'PATCH', path: 'refs' }), json(422, { message: 'Repository rule violations found' }))
+        : fetch(url, init));
+    await assert.rejects(commitFiles(args(ruled)), { message: 'GitHub refused the publish: Repository rule violations found' });
+    assert.equal(state.calls.filter(c => c.method === 'PATCH').length, 1);
+    assert.equal(state.ref, 'C1');
+});
+
+test('commitFiles: an image name that differs only in letter case is a clash', async () => {
+    const { state, fetch } = fakeGitHub();
+    state.push({ 'src/images/blog/p/Cat.jpg': 'ANOTHERCAT' });
+    await assert.rejects(commitFiles(args(fetch)), err => err.imageExists === CAT_PATH);
+    assert.deepEqual(posts(state), []);
+});
+
 test('commitFiles never overwrites another image with the same name', async () => {
     const { state, fetch } = fakeGitHub();
     state.push({ [CAT_PATH]: 'ANOTHERCAT' });
