@@ -72,7 +72,8 @@ export function addSiteScreen(container) {
         <section class="card" aria-labelledby="checks-title">
             <h2 class="card-title" id="checks-title">Checks</h2>
             <ul class="checks" id="checks"></ul>
-            <p class="field-hint" id="checks-hint">The checks start when the repository, the branch and the token are filled in.</p>
+            <p class="field-hint" id="checks-hint">The checks start when you type the repository, the branch and the token.</p>
+            <p class="visually-hidden" id="checks-status" aria-live="polite"></p>
         </section>
         <div class="message-error" id="add-error" role="alert"></div>
     </form>
@@ -91,6 +92,7 @@ export function addSiteScreen(container) {
 
     let timer = null;
     let runId = 0;
+    let controller = null; // Stops the requests of a run that is no longer needed.
     let passed = null; // The result of the last check run, when all checks passed.
 
     const renderChecks = results => {
@@ -102,15 +104,23 @@ export function addSiteScreen(container) {
         nameInput.placeholder = defaultName(parseRepoInput(draft.repo));
     };
 
+    const repoHint = $('repo-hint');
+    const REPO_HINT = repoHint.textContent;
+
     const scheduleChecks = () => {
         clearTimeout(timer);
         runId++;
+        controller?.abort();
+        $('checks-status').textContent = '';
         passed = null;
         addButton.disabled = true;
         errorBox.textContent = '';
 
         const parsed = parseRepoInput(draft.repo);
-        repoInput.setAttribute('aria-invalid', String(Boolean(draft.repo.trim()) && !parsed));
+        const repoInvalid = Boolean(draft.repo.trim()) && !parsed;
+        repoInput.setAttribute('aria-invalid', String(repoInvalid));
+        repoHint.textContent = repoInvalid ? `This is not a GitHub repository. ${REPO_HINT}` : REPO_HINT;
+        repoHint.classList.toggle('field-hint--error', repoInvalid);
         if (!parsed || !draft.branch.trim() || !draft.token.trim()) {
             renderChecks(null);
             return;
@@ -122,18 +132,23 @@ export function addSiteScreen(container) {
     const runChecks = async parsed => {
         const id = ++runId;
         const branch = draft.branch.trim();
+        controller = new AbortController();
         const result = await checkSite({
             ...parsed,
             branch,
             token: draft.token.trim(),
+            signal: controller.signal,
             onUpdate: results => {
                 if (id === runId) renderChecks(results);
             }
         });
-        if (id !== runId) return; // A newer run started: ignore this one.
+        if (id !== runId || result.cancelled) return; // A newer run started: ignore this one.
         if (result.ok) {
             passed = { ...parsed, branch, templateVersion: result.templateVersion };
             addButton.disabled = false;
+            $('checks-status').textContent = 'All checks passed. You can add the site.';
+        } else {
+            $('checks-status').textContent = `A check failed: ${result.results.find(r => r.status === 'fail')?.label ?? ''}`;
         }
     };
 
@@ -194,7 +209,7 @@ export function addSiteScreen(container) {
             errorBox.textContent = err instanceof DuplicateSiteError
                 ? err.message
                 : 'The app could not save the site on this device. Try again.';
-            addButton.disabled = false;
+            addButton.disabled = !passed;
         }
     });
 
@@ -204,5 +219,6 @@ export function addSiteScreen(container) {
     return () => {
         clearTimeout(timer);
         runId++;
+        controller?.abort();
     };
 }

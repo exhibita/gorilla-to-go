@@ -212,3 +212,38 @@ test('getTemplateVersion reports a token that GitHub no longer accepts', async (
     const { fetch } = fakeFetch(routes);
     assert.deepEqual(await getTemplateVersion({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch }), { ok: false, label: 'Token not accepted' });
 });
+
+test('parseRepoInput accepts URLs with a query or an anchor, and the SSH clone URL', () => {
+    const expected = { owner: 'exhibita', repo: 'gtg-test-site' };
+    assert.deepEqual(parseRepoInput('https://github.com/exhibita/gtg-test-site?tab=readme-ov-file'), expected);
+    assert.deepEqual(parseRepoInput('https://github.com/exhibita/gtg-test-site#readme'), expected);
+    assert.deepEqual(parseRepoInput('git@github.com:exhibita/gtg-test-site.git'), expected);
+    assert.equal(parseRepoInput('exhibita/..'), null);
+});
+
+test('a request that hangs fails with "No connection to GitHub" after the time limit', { timeout: 3000 }, async () => {
+    // Never answers. Only an abort signal can end the request.
+    const hangingFetch = (url, init) => new Promise((resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+    });
+    const started = Date.now();
+    const result = await checkSite({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch: hangingFetch, timeoutMs: 50 });
+    assert.ok(Date.now() - started < 2000);
+    assert.equal(result.ok, false);
+    assert.equal(result.results[0].status, 'fail');
+    assert.equal(result.results[0].label, 'No connection to GitHub');
+});
+
+test('a run stops when the caller cancels it, and makes no more requests', async () => {
+    const controller = new AbortController();
+    const { fetch, calls } = fakeFetch(goodRoutes());
+    const cancellingFetch = async (url, init) => {
+        const response = await fetch(url, init);
+        controller.abort();
+        return response;
+    };
+    const result = await checkSite({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch: cancellingFetch, signal: controller.signal });
+    assert.equal(result.ok, false);
+    assert.equal(result.cancelled, true);
+    assert.equal(calls.length, 1);
+});

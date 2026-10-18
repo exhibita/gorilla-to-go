@@ -39,13 +39,32 @@ async function render() {
         const match = hash.match(pattern);
         if (match) {
             window.scrollTo(0, 0);
-            cleanup = (await handler(container, match.slice(1).map(decodeURIComponent))) || null;
+            try {
+                cleanup = (await handler(container, match.slice(1).map(decodeURIComponent))) || null;
+            } catch {
+                showError();
+            }
             // Move focus to the screen title, so screen readers announce the new screen.
             container.querySelector('h1')?.focus({ preventScroll: true });
             return;
         }
     }
     navigate('#/', { replace: true });
+}
+
+// Shown when a screen cannot open, for example when the browser blocks storage.
+function showError() {
+    container.innerHTML = `
+<div class="screen">
+    <div class="screen-body">
+        <h1 class="page-title" tabindex="-1">The screen did not open</h1>
+        <p>The app cannot open this screen.</p>
+        <p class="muted">In a private window, the browser can stop the app from storing data. Use a normal window.</p>
+        <button type="button" class="btn btn-primary" data-reload>Try again</button>
+        <a class="text-link" href="#/">Go to the start screen</a>
+    </div>
+</div>`;
+    container.querySelector('[data-reload]').addEventListener('click', () => location.reload());
 }
 
 export function startRouter(element) {

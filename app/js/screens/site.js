@@ -98,6 +98,7 @@ export async function siteScreen(container, [id]) {
         <div class="sheet-body">
             <h2 class="sheet-title" id="remove-title">Remove ${name}?</h2>
             <p>The app deletes this site and its token from this device. The repository on GitHub does not change.</p>
+            <p class="message-error" id="remove-error" role="alert"></p>
             <button type="button" class="btn btn-danger" id="confirm-remove">Remove site</button>
             <button type="button" class="btn btn-secondary" data-close>Cancel</button>
         </div>
@@ -126,10 +127,18 @@ export async function siteScreen(container, [id]) {
 
     $('#open-remove').addEventListener('click', () => $('#remove').showModal());
     $('#confirm-remove').addEventListener('click', async () => {
-        await removeSite(site.id);
+        try {
+            await removeSite(site.id);
+        } catch {
+            $('#remove-error').textContent = 'The app cannot remove the site. Try again.';
+            return;
+        }
         $('#remove').close();
         navigate('#/', { replace: true });
     });
 
-    checkTemplate(site, $('#template-row'));
+    const templateRow = $('#template-row');
+    checkTemplate(site, templateRow).catch(() => {
+        templateRow.innerHTML = templateRowHtml('waiting', 'Not checked: the app cannot read its stored data');
+    });
 }

@@ -190,7 +190,7 @@ button, input { font: inherit; color: inherit; }
 .btn-danger { background: var(--card); color: var(--fail-text); border: 1px solid var(--border); }
 
 .btn-small {
-    min-height: 36px;
+    min-height: 44px;
     padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -228,7 +228,7 @@ button, input { font: inherit; color: inherit; }
     gap: 6px;
 }
 
-.text-link--small { min-height: 32px; font-size: 14px; justify-content: flex-start; }
+.text-link--small { min-height: 44px; font-size: 14px; justify-content: flex-start; }
 
 /* ---------- Cards and chips ---------- */
 .card {
@@ -296,6 +296,7 @@ button, input { font: inherit; color: inherit; }
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field label { font-size: 15px; font-weight: 600; }
 .field-hint { font-size: 13px; color: var(--muted); }
+.field-hint--error { color: var(--fail-text); font-weight: 600; }
 .field-row { display: flex; gap: 12px; }
 .field-row .field:first-child { flex: 1; }
 .field-row .field:last-child { flex: 1.4; }

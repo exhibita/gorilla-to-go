@@ -18,9 +18,16 @@ export const CHECKS = [
 
 const NAME = /^[A-Za-z0-9_.-]+$/;
 
-// Read "owner/repo" or a GitHub URL. Return { owner, repo }, or null if the text is not a repository.
+// A request that gets no answer in this time fails with "No connection to GitHub".
+const REQUEST_TIMEOUT_MS = 15000;
+
+// Read "owner/repo", a GitHub URL or the SSH clone address. Return { owner, repo }, or null if the
+// text is not a repository.
 export function parseRepoInput(text) {
-    let value = String(text ?? '').trim().replace(/^https?:\/\//i, '');
+    let value = String(text ?? '').trim()
+        .replace(/[?#].*$/, '') // A query or an anchor, for example ?tab=readme-ov-file
+        .replace(/^git@github\.com:/i, '')
+        .replace(/^https?:\/\//i, '');
     if (/^(www\.)?github\.com\//i.test(value)) {
         value = value.replace(/^(www\.)?github\.com\//i, '');
     } else if (/^[^/]*\./.test(value)) {
@@ -28,25 +35,40 @@ export function parseRepoInput(text) {
     }
     const [owner, rawRepo, ...rest] = value.split('/');
     const repo = (rawRepo ?? '').replace(/\.git$/i, '');
-    if (!owner || !repo || !NAME.test(owner) || !NAME.test(repo) || /\s/.test(rest.join('/'))) return null;
+    if (!owner || !repo || !NAME.test(owner) || !NAME.test(repo) || /^\.+$/.test(repo) || /\s/.test(rest.join('/'))) return null;
     return { owner, repo };
 }
 
-// One GitHub API request. Returns the Response. Throws a NetworkError when there is no connection.
-async function request(fetch, token, path, { method = 'GET', body } = {}) {
+class NetworkError extends Error {}
+class CancelledError extends Error {}
+
+// One GitHub API request. Returns the Response.
+// Throws NetworkError when there is no connection or no answer in time, and CancelledError when the
+// caller's signal stops the request.
+async function request(fetch, token, path, { method = 'GET', body, signal, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
+    if (signal?.aborted) throw new CancelledError();
     const headers = {
         Accept: 'application/vnd.github+json',
         Authorization: authorizationHeader(token)
     };
     if (body) headers['Content-Type'] = 'application/json';
+
+    // One controller for the time limit and the caller's signal (AbortSignal.any is not on older iOS).
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const stop = () => controller.abort();
+    signal?.addEventListener('abort', stop);
     try {
-        return await fetch(`${API}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
+        return await fetch(`${API}${path}`, {
+            method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store', signal: controller.signal
+        });
     } catch {
-        throw new NetworkError();
+        throw signal?.aborted ? new CancelledError() : new NetworkError();
+    } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', stop);
     }
 }
-
-class NetworkError extends Error {}
 
 const repoPath = (owner, repo) => `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
 
@@ -59,11 +81,12 @@ function decodeBase64(content) {
 // Read vanillaGorilla.templateVersion from package.json on the branch.
 // Returns { ok: true, version } or { ok: false, label } with the failure text.
 // A package.json without the field is template version 1.
-export async function getTemplateVersion({ owner, repo, branch, token, fetch = globalThis.fetch }) {
+export async function getTemplateVersion({ owner, repo, branch, token, fetch = globalThis.fetch, signal, timeoutMs }) {
     let response;
     try {
-        response = await request(fetch, token, `${repoPath(owner, repo)}/contents/package.json?ref=${encodeURIComponent(branch)}`);
-    } catch {
+        response = await request(fetch, token, `${repoPath(owner, repo)}/contents/package.json?ref=${encodeURIComponent(branch)}`, { signal, timeoutMs });
+    } catch (err) {
+        if (err instanceof CancelledError) throw err;
         return { ok: false, label: 'No connection to GitHub' };
     }
     if (response.status === 401) return { ok: false, label: 'Token not accepted' };
@@ -79,9 +102,11 @@ export async function getTemplateVersion({ owner, repo, branch, token, fetch = g
 }
 
 // Run the Add a site checks in order. The first failure stops the run.
-// onUpdate(results) is called after each change. Returns { ok, templateVersion, results }.
+// onUpdate(results) is called after each change. Returns { ok, templateVersion, results }, with
+// cancelled: true when the signal stopped the run.
 // Each result: { id, label, status: 'waiting'|'running'|'pass'|'fail', help? }.
-export async function checkSite({ owner, repo, branch, token, fetch = globalThis.fetch, onUpdate = () => {} }) {
+export async function checkSite({ owner, repo, branch, token, fetch = globalThis.fetch, onUpdate = () => {}, signal, timeoutMs }) {
+    const net = { signal, timeoutMs };
     const results = CHECKS.map(check => ({ ...check, status: 'waiting' }));
     const byId = id => results.find(r => r.id === id);
     let templateVersion = null;
@@ -101,7 +126,7 @@ export async function checkSite({ owner, repo, branch, token, fetch = globalThis
         // 1. Token, and 2. repository: one request tells both. 401 = bad token, 404 = no such repository
         // (or the token has no access to it).
         set('token', 'running');
-        const repoResponse = await request(fetch, token, base);
+        const repoResponse = await request(fetch, token, base, net);
         if (repoResponse.status === 401) return fail('token', 'Token not accepted');
         if (repoResponse.status !== 200 && repoResponse.status !== 404) return fail('token', unexpected(repoResponse));
         set('token', 'pass');
@@ -113,7 +138,8 @@ export async function checkSite({ owner, repo, branch, token, fetch = globalThis
         // creates nothing. Without write access GitHub refuses the request (403 or 404).
         const writeResponse = await request(fetch, token, `${base}/git/refs`, {
             method: 'POST',
-            body: { ref: 'refs/heads/gtg-write-check', sha: '0'.repeat(40) }
+            body: { ref: 'refs/heads/gtg-write-check', sha: '0'.repeat(40) },
+            ...net
         });
         if (writeResponse.status === 403 || writeResponse.status === 404) return fail('repo', 'No write access');
         if (writeResponse.status !== 422) return fail('repo', unexpected(writeResponse));
@@ -121,14 +147,14 @@ export async function checkSite({ owner, repo, branch, token, fetch = globalThis
 
         // 3. Branch.
         set('branch', 'running');
-        const branchResponse = await request(fetch, token, `${base}/branches/${encodeURIComponent(branch)}`);
+        const branchResponse = await request(fetch, token, `${base}/branches/${encodeURIComponent(branch)}`, net);
         if (branchResponse.status === 404) return fail('branch', `Branch ${branch} not found`);
         if (!branchResponse.ok) return fail('branch', unexpected(branchResponse));
         set('branch', 'pass', { label: `Branch ${branch} found` });
 
         // 4. Template version.
         set('template', 'running');
-        const template = await getTemplateVersion({ owner, repo, branch, token, fetch });
+        const template = await getTemplateVersion({ owner, repo, branch, token, fetch, ...net });
         if (!template.ok) return fail('template', template.label);
         templateVersion = template.version;
         const templateLabel = `Template version ${templateVersion} (required: ${REQUIRED_TEMPLATE_VERSION})`;
@@ -137,13 +163,14 @@ export async function checkSite({ owner, repo, branch, token, fetch = globalThis
 
         // 5. Actions: needed later for the publish status.
         set('actions', 'running');
-        const actionsResponse = await request(fetch, token, `${base}/actions/runs?per_page=1`);
+        const actionsResponse = await request(fetch, token, `${base}/actions/runs?per_page=1`, net);
         if (actionsResponse.status === 403 || actionsResponse.status === 404) return fail('actions', 'No Actions access');
         if (!actionsResponse.ok) return fail('actions', unexpected(actionsResponse));
         set('actions', 'pass');
 
         return { ok: true, templateVersion, results };
     } catch (err) {
+        if (err instanceof CancelledError) return { ok: false, cancelled: true, templateVersion, results };
         if (!(err instanceof NetworkError)) throw err;
         const running = results.find(r => r.status === 'running') ?? results[0];
         return fail(running.id, 'No connection to GitHub');
