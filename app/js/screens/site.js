@@ -24,6 +24,9 @@ const view = { siteId: null, type: 'all', query: '' };
 // The last list of each site in this session, so "Back" from a page shows it at once.
 const lastLists = new Map();
 
+// After a delete: the next visit shows the saved list without the page, not the remembered one.
+export const forgetList = siteId => lastLists.delete(siteId);
+
 
 // Type label, Draft label, date and image count of a page.
 export function pageMetaHtml(page) {

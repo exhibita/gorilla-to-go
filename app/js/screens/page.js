@@ -1,13 +1,69 @@
 // Page view: one page for reading. It shows the front matter and the Markdown text, and opens the editor.
 import { getToken } from '../auth.js';
-import { getLocalEdit } from '../edits.js';
+import { getLocalEdit, deleteLocalEdit } from '../edits.js';
 import { getSite } from '../sites.js';
-import { getPageText, deviceStore } from '../pages.js';
+import { getPageText, deviceStore, recordDeletedPage } from '../pages.js';
 import { parseFrontmatter } from '../frontmatter.js';
 import { classifyPath, pageSummary } from '../pages-logic.js';
 import { escapeHtml, icon } from '../dom.js';
 import { back, navigate } from '../router.js';
-import { pageMetaHtml } from './site.js';
+import { pageMetaHtml, forgetList } from './site.js';
+import { deleteFile } from '../github.js';
+
+// Delete the page (mvp-plan section 5): confirmation first, then one commit with the SHA the user
+// opened, so a page that changed on GitHub is not deleted.
+function bindDelete({ container, site, path, entry, slug, token, siteHref }) {
+    const $ = selector => container.querySelector(selector);
+    const dialog = $('#delete-page');
+    let deleting = false;
+    const warnBeforeClose = event => {
+        event.preventDefault();
+        event.returnValue = '';
+    };
+    dialog.querySelector('[data-close]').addEventListener('click', () => {
+        if (!deleting) dialog.close();
+    });
+    $('#open-delete-page').addEventListener('click', () => {
+        $('#delete-error').textContent = '';
+        $('#delete-status').textContent = '';
+        dialog.showModal();
+    });
+    $('#confirm-delete-page').addEventListener('click', async () => {
+        if (deleting) return; // One request for two quick taps.
+        deleting = true;
+        $('#confirm-delete-page').disabled = true;
+        $('#delete-error').textContent = '';
+        $('#delete-status').textContent = 'Deleting. Keep the app open until this is complete.';
+        window.addEventListener('beforeunload', warnBeforeClose);
+        try {
+            await deleteFile({
+                owner: site.owner,
+                repo: site.repo,
+                branch: site.branch,
+                path,
+                sha: entry.sha,
+                message: `Delete ${slug} with Gorilla To Go`,
+                token
+            });
+            await recordDeletedPage({ site, path }).catch(() => {});
+            await deleteLocalEdit(site.id, path).catch(() => {});
+            forgetList(site.id);
+            dialog.close();
+            back(siteHref);
+        } catch (err) {
+            $('#delete-status').textContent = '';
+            $('#delete-error').textContent = err.conflict
+                ? 'This page changed on GitHub after you opened it. The app did not delete it. Go back to the pages and tap Refresh.'
+                : err.offline
+                    ? 'No connection. The page is not deleted.'
+                    : `The page is not deleted: ${err.message}.`;
+        } finally {
+            deleting = false;
+            $('#confirm-delete-page').disabled = false;
+            window.removeEventListener('beforeunload', warnBeforeClose);
+        }
+    });
+}
 
 const githubFileUrl = (site, path) =>
     `https://github.com/${encodeURIComponent(site.owner)}/${encodeURIComponent(site.repo)}/blob/` +
@@ -89,8 +145,23 @@ export async function pageScreen(container, [siteId, path]) {
         </section>
         <a class="text-link text-link--small" href="${githubFileUrl(site, path)}" target="_blank" rel="noopener noreferrer">Open the file on GitHub ${icon('external', 14)}</a>
         ${hasLocalEdit ? '<p class="banner">This page has changes on this device that are not published. Tap Edit to see them.</p>' : ''}
-        <a class="btn btn-primary" href="#/site/${encodeURIComponent(site.id)}/edit/${encodeURIComponent(path)}">${icon('edit')} Edit</a>`;
+        <a class="btn btn-primary" href="#/site/${encodeURIComponent(site.id)}/edit/${encodeURIComponent(path)}">${icon('edit')} Edit</a>
+        <button type="button" class="btn btn-danger" id="open-delete-page" aria-haspopup="dialog">Delete page</button>
+
+        <dialog class="sheet" id="delete-page" aria-labelledby="delete-page-title">
+            <div class="sheet-body">
+                <h2 class="sheet-title" id="delete-page-title">Delete ${escapeHtml(page.title)}?</h2>
+                <p>The app deletes this page from the repository on GitHub. The site removes the page after the next deploy, in a few minutes.</p>
+                <p>Images that the page uses stay in the repository.</p>
+                ${hasLocalEdit ? '<p class="banner">The changes on this device that are not published are deleted too.</p>' : ''}
+                <p class="muted small" id="delete-status" aria-live="polite"></p>
+                <p class="message-error" id="delete-error" role="alert"></p>
+                <button type="button" class="btn btn-danger" id="confirm-delete-page">Delete page</button>
+                <button type="button" class="btn btn-secondary" data-close>Cancel</button>
+            </div>
+        </dialog>`;
         body.querySelector('h1').focus({ preventScroll: true });
+        bindDelete({ container, site, path, entry, slug: page.slug, token, siteHref });
     } catch (err) {
         if (controller.signal.aborted) return;
         const status = container.querySelector('#page-status');
