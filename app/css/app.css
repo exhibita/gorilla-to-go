@@ -769,3 +769,22 @@ button, input, textarea { font: inherit; color: inherit; }
 .about-logo { width: 63px; height: 80px; object-fit: contain; }
 .about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; }
 .about .btn { align-self: stretch; }
+
+/* ---------- Photos of a gallery page (step 8) ---------- */
+.segmented--three button { padding: 0 10px; }
+.photos { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; }
+.photos .btn { flex: none; }
+.photo-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.photo-grid > li { display: flex; }
+.photo-card { width: 100%; min-height: 44px; padding: 0 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--text); font: inherit; text-align: left; display: flex; flex-direction: column; gap: 6px; overflow: hidden; cursor: pointer; }
+.photo-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.photo-frame { display: block; aspect-ratio: 4 / 3; background: var(--bg-2); }
+.photo-frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.photo-label { padding: 0 10px; font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+.photo-marks { padding: 0 10px; display: flex; flex-wrap: wrap; gap: 4px; }
+.photo-marks:empty { display: none; }
+.photo-mark { padding: 2px 8px; border-radius: 999px; background: var(--gallery-bg); color: var(--gallery-text); font-size: 12px; font-weight: 500; }
+.photo-mark--warn { background: var(--fail-bg); color: var(--fail-text); }
+.sheet-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.preview-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 16px; }
+.editor-preview .preview-gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; margin: 0; }
