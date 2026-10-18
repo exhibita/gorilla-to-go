@@ -7,12 +7,12 @@ import { getToken } from '../auth.js';
 import { getSite } from '../sites.js';
 import { getPageText, recordSavedPage, deviceStore } from '../pages.js';
 import { parseFrontmatter } from '../frontmatter.js';
-import { splitPage, composePage, setFields, editedBody } from '../frontmatter-write.js';
+import { splitPage, composePage, setFields, setImages, editedBody } from '../frontmatter-write.js';
 import { classifyPath, listTimeText, TYPE_LABELS } from '../pages-logic.js';
 import { toggleWrap, toggleLinePrefix, insertLink, createHistory } from '../editor-logic.js';
 import { getLocalEdit, saveLocalEdit, deleteLocalEdit } from '../edits.js';
 import { saveFile, pathExists, commitFiles, listFolder, getImageDataUrl, gitBlobSha, base64ToBytes } from '../github.js';
-import { imageFolder, imageName, markdownPath, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath } from '../images.js';
+import { imageFolder, imageName, markdownPath, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, galleryItems, galleryImagePath, moveItem } from '../images.js';
 import { prepareImage, ImageError } from '../image-resize.js';
 import { sanitizeHtml } from '../sanitize.js';
 import { escapeHtml, icon } from '../dom.js';
@@ -91,6 +91,8 @@ export async function editorScreen(container, [siteId, path]) {
         pendingImages = newPage.images ?? [];
     }
     const folder = imageFolder(path);
+    // A gallery page has a Photos view for its images: list (step 8).
+    const isGallery = kind.type === 'gallery';
     const siteHref = `#/site/${encodeURIComponent(site.id)}`;
     const backHref = isNew ? siteHref : pageHref;
 
@@ -98,12 +100,16 @@ export async function editorScreen(container, [siteId, path]) {
     let parts;
     let frontmatterError;
     let fields;
+    let gallery = []; // The images: list of a gallery page.
+    let hasCover = false; // With a cover: key, the first photo is not the cover.
     const load = text => {
         parts = splitPage(text);
         const parsed = parseFrontmatter(text);
         frontmatterError = parsed.error;
         const value = key => (parsed.data[key] == null || typeof parsed.data[key] === 'object' ? '' : String(parsed.data[key]));
         fields = { title: value('title'), date: value('date'), description: value('description') };
+        gallery = galleryItems(parsed.data);
+        hasCover = Boolean(parsed.data.cover); // As the build: cover: false is no cover.
     };
     load(startText);
 
@@ -112,7 +118,8 @@ export async function editorScreen(container, [siteId, path]) {
     const bodyText = () => editedBody(textarea.value, parts.body, parts.eol);
     const currentText = () => {
         if (frontmatterError) return composePage({ ...parts, body: bodyText() });
-        const raw = setFields(parts.raw, fields);
+        let raw = setFields(parts.raw, fields);
+        if (isGallery) raw = setImages(raw, gallery);
         return composePage({ ...parts, raw, body: bodyText(), hasFrontmatter: parts.hasFrontmatter || raw !== '' });
     };
 
@@ -120,8 +127,9 @@ export async function editorScreen(container, [siteId, path]) {
 <div class="screen editor-screen" id="editor-screen">
     <header class="topbar editor-topbar">
         <a class="icon-btn icon-btn--plain" href="${backHref}" data-back aria-label="${isNew ? 'Back to the pages' : 'Back to the page'}">${icon('back', 22)}</a>
-        <div class="segmented" role="group" aria-label="View">
+        <div class="segmented${isGallery ? ' segmented--three' : ''}" role="group" aria-label="View">
             <button type="button" data-mode="write" aria-pressed="true">Write</button>
+            ${isGallery ? '<button type="button" data-mode="photos" aria-pressed="false">Photos</button>' : ''}
             <button type="button" data-mode="preview" aria-pressed="false">Preview</button>
         </div>
         <button type="button" class="btn-publish" id="publish">Publish</button>
@@ -142,6 +150,12 @@ export async function editorScreen(container, [siteId, path]) {
         <label class="visually-hidden" for="editor-text">Page text (Markdown)</label>
         <textarea id="editor-text" class="editor-text" spellcheck="true" autocapitalize="sentences"></textarea>
         <div class="editor-preview prose" id="preview" hidden></div>
+        ${isGallery ? `<div class="photos" id="photos" hidden>
+            <button type="button" class="btn btn-secondary" id="add-photos">${icon('plus', 18)} Add photos</button>
+            <p class="muted small" id="photos-hint"></p>
+            <ol class="photo-grid" id="photo-grid"></ol>
+            <input type="file" id="photo-files" accept="image/*" multiple hidden>
+        </div>` : ''}
     </div>
     <p class="editor-status" id="editor-status" aria-live="polite"></p>
     <div class="editor-toolbar" role="toolbar" aria-label="Formatting">
@@ -187,6 +201,31 @@ export async function editorScreen(container, [siteId, path]) {
         </form>
     </dialog>
 
+    ${isGallery ? `<dialog class="sheet" id="photo-sheet" aria-labelledby="photo-sheet-title">
+        <form class="sheet-body" id="photo-form" novalidate>
+            <h2 class="sheet-title" id="photo-sheet-title" aria-live="polite"></h2>
+            <img class="image-thumb" id="photo-thumb" alt="" hidden>
+            <p class="muted small" id="photo-path"></p>
+            <div class="field">
+                <label for="photo-alt">Alt text</label>
+                <textarea class="input input-multiline" id="photo-alt" rows="2"></textarea>
+                <div class="field-hint">Describe the image for people who cannot see it.</div>
+            </div>
+            <div class="field">
+                <label for="photo-caption">Caption</label>
+                <input class="input" id="photo-caption" type="text">
+                <div class="field-hint">Shows on the photo and in the large view. Optional.</div>
+            </div>
+            <div class="sheet-row">
+                <button type="button" class="btn btn-secondary" id="photo-earlier">Move earlier</button>
+                <button type="button" class="btn btn-secondary" id="photo-later">Move later</button>
+            </div>
+            <button type="submit" class="btn btn-primary">Apply</button>
+            <button type="button" class="btn btn-secondary" id="photo-remove">Remove from gallery</button>
+            <button type="button" class="btn btn-secondary" data-close>Cancel</button>
+        </form>
+    </dialog>` : ''}
+
     <dialog class="sheet" id="conflict" aria-labelledby="conflict-title">
         <div class="sheet-body">
             <h2 class="sheet-title" id="conflict-title">The page changed on GitHub</h2>
@@ -226,6 +265,7 @@ export async function editorScreen(container, [siteId, path]) {
 
     if (frontmatterError) {
         $('#open-details').disabled = true;
+        container.querySelector('[data-mode="photos"]')?.setAttribute('disabled', '');
         status('The app cannot read the front matter of this page. You can change the text. The front matter stays as it is.');
     }
     if (isNew) status('This page is not published yet. It is kept on this device until you tap Publish.');
@@ -301,6 +341,7 @@ export async function editorScreen(container, [siteId, path]) {
             textarea.value = parts.body;
             showTitle();
             history = createHistory({ text: textarea.value, start: 0, end: 0 });
+            if (photos && !photos.hidden) renderPhotos();
             banner.hidden = true;
             status(`Restored the changes from ${listTimeText(local.savedAt)}.`);
         });
@@ -471,19 +512,230 @@ export async function editorScreen(container, [siteId, path]) {
         }
     };
 
-    // ----- Write / Preview -----
+    // ----- Photos of a gallery page (mvp-plan section 6, screen 6) -----
+    const photos = $('#photos');
+    const photoSheet = $('#photo-sheet');
+    let photoIndex = -1; // The photo in the sheet.
+    const isPhoto = item => item !== null && typeof item === 'object' && !Array.isArray(item);
+    const textOf = value => (value == null ? '' : String(value));
+
+    // The grid: one button per photo, with the thumbnail, the caption or the name, and marks.
+    const renderPhotos = () => {
+        if (!photos) return;
+        $('#photos-hint').textContent = gallery.length
+            ? `${gallery.length} ${gallery.length === 1 ? 'photo' : 'photos'}. Tap a photo to change its text or its place.${hasCover ? '' : ' The first photo is the cover on the gallery page.'}`
+            : 'This gallery has no photos. Tap Add photos.';
+        // The build uses the first item with a path as the cover, unless the page has cover:.
+        const coverIndex = hasCover ? -1 : gallery.findIndex(item => isPhoto(item) && typeof item.path === 'string' && item.path.trim() !== '');
+        $('#photo-grid').replaceChildren(...gallery.map((item, index) => {
+            const photoPath = isPhoto(item) ? galleryImagePath(item.path) : null;
+            const name = isPhoto(item) && typeof item.path === 'string' ? item.path.split('/').pop() : '(no path)';
+            const label = isPhoto(item) ? textOf(item.caption) || textOf(item.alt) || name : String(item);
+            const li = document.createElement('li');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'photo-card';
+            button.setAttribute('aria-haspopup', 'dialog');
+            button.addEventListener('click', () => openPhoto(index));
+            const frame = document.createElement('span');
+            frame.className = 'photo-frame';
+            if (photoPath) {
+                const img = document.createElement('img');
+                img.alt = '';
+                img.addEventListener('error', () => img.remove(), { once: true });
+                imageUrl(photoPath).then(url => {
+                    if (url) img.src = url;
+                    else img.remove();
+                });
+                frame.append(img);
+            }
+            const marks = [];
+            if (index === coverIndex) marks.push('Cover');
+            if (pendingImages.some(image => image.path === photoPath)) marks.push('Not published');
+            if (isPhoto(item) && !textOf(item.alt) && !textOf(item.caption)) marks.push('No alt text');
+            const text = document.createElement('span');
+            text.className = 'photo-label';
+            text.textContent = label;
+            const markList = document.createElement('span');
+            markList.className = 'photo-marks';
+            for (const mark of marks) {
+                const chip = document.createElement('span');
+                chip.className = `photo-mark${mark === 'No alt text' ? ' photo-mark--warn' : ''}`;
+                chip.textContent = mark;
+                markList.append(chip);
+            }
+            button.setAttribute('aria-label', `Photo ${index + 1}: ${label}${marks.length ? ` (${marks.join(', ')})` : ''}`);
+            button.append(frame, text, markList);
+            li.append(button);
+            return li;
+        }));
+    };
+
+    // The sheet for one photo: alt text, caption, place, remove.
+    const fillPhotoSheet = () => {
+        const item = gallery[photoIndex];
+        const editable = isPhoto(item);
+        $('#photo-sheet-title').textContent = `Photo ${photoIndex + 1} of ${gallery.length}`;
+        $('#photo-path').textContent = editable ? textOf(item.path) || '(no path)' : `This item is not a photo: ${String(item)}`;
+        $('#photo-alt').value = editable ? textOf(item.alt) : '';
+        $('#photo-caption').value = editable ? textOf(item.caption) : '';
+        $('#photo-alt').disabled = !editable;
+        $('#photo-caption').disabled = !editable;
+        $('#photo-earlier').disabled = photoIndex === 0;
+        $('#photo-later').disabled = photoIndex === gallery.length - 1;
+        const thumb = $('#photo-thumb');
+        thumb.hidden = true;
+        thumb.removeAttribute('src');
+        const photoPath = editable ? galleryImagePath(item.path) : null;
+        if (photoPath) {
+            const shownItem = item;
+            imageUrl(photoPath).then(url => {
+                // The sheet can show another photo now (after a move, a remove or a new open).
+                if (!url || gallery[photoIndex] !== shownItem || !photoSheet.open) return;
+                thumb.src = url;
+                thumb.hidden = false;
+            });
+        }
+    };
+    const openPhoto = index => {
+        photoIndex = index;
+        fillPhotoSheet();
+        photoSheet.showModal();
+    };
+    // Put the typed text in the photo. An empty value takes the key out of the item.
+    const takeTypedText = () => {
+        const item = gallery[photoIndex];
+        if (!isPhoto(item)) return;
+        for (const key of ['alt', 'caption']) {
+            const typed = $(`#photo-${key}`).value.replace(/\s+/g, ' ').trim(); // One line, as on the site.
+            if (typed === textOf(item[key]).trim()) continue;
+            if (typed) item[key] = typed;
+            else delete item[key];
+        }
+    };
+    const photosChanged = () => {
+        renderPhotos();
+        keepSoon();
+    };
+    photoSheet?.querySelector('[data-close]').addEventListener('click', () => photoSheet.close());
+    $('#photo-form')?.addEventListener('submit', event => {
+        event.preventDefault();
+        takeTypedText();
+        photoSheet.close();
+        photosChanged();
+    });
+    for (const [id, step] of [['#photo-earlier', -1], ['#photo-later', 1]]) {
+        $(id)?.addEventListener('click', () => {
+            takeTypedText();
+            gallery = moveItem(gallery, photoIndex, photoIndex + step);
+            photoIndex += step;
+            fillPhotoSheet();
+            photosChanged();
+            // At the first or last place this button is off: keep the focus in the sheet.
+            if ($(id).disabled) $(step < 0 ? '#photo-later' : '#photo-earlier').focus();
+        });
+    }
+    $('#photo-remove')?.addEventListener('click', () => {
+        const removed = photoIndex;
+        gallery = gallery.filter((_, index) => index !== removed);
+        photoSheet.close();
+        photosChanged();
+        status('The photo is removed from the gallery. The image file stays in the repository.');
+        // The card that opened the sheet is gone: put the focus on the photo now in its place.
+        const cards = container.querySelectorAll('.photo-card');
+        (cards[Math.min(removed, cards.length - 1)] ?? $('#add-photos')).focus();
+    });
+
+    // Add photos: several at once. Each one is made ready as in the editor (step 7).
+    $('#add-photos')?.addEventListener('click', () => {
+        if (publishing) {
+            status('Wait until Publish is complete, then add photos.');
+            return;
+        }
+        if (preparing) return;
+        $('#photo-files').click();
+    });
+    $('#photo-files')?.addEventListener('change', async () => {
+        const input = $('#photo-files');
+        const files = [...input.files];
+        input.value = '';
+        if (!files.length) return;
+        preparing = true;
+        const problems = [];
+        let added = 0;
+        let lastAdded = null;
+        try {
+            githubNames = await namesOnGitHub();
+            for (const [i, file] of files.entries()) {
+                status(files.length === 1 ? 'Making the photo ready.' : `Making photo ${i + 1} of ${files.length} ready.`);
+                try {
+                    const prepared = await prepareImage(file);
+                    const repoPath = folder + freeName(file.name, prepared.extension);
+                    pendingImages = [...pendingImages, { path: repoPath, base64: prepared.base64, mimeType: prepared.mimeType }];
+                    lastAdded = { path: markdownPath(repoPath) };
+                    gallery = [...gallery, lastAdded];
+                    added++;
+                    renderPhotos();
+                    keepSoon(); // Each photo is kept on the device, also when the user leaves now.
+                } catch (err) {
+                    problems.push(`${file.name}: ${err instanceof ImageError ? err.message : 'The app cannot read this image.'}`);
+                }
+            }
+        } finally {
+            preparing = false;
+        }
+        if (added) await keepNow();
+        if (!photos.isConnected) return; // The user left the editor. The photos are kept.
+        const one = added === 1 && files.length === 1;
+        const addedText = added === 0 ? '' : `Added ${added} ${added === 1 ? 'photo' : 'photos'}. ${one ? '' : 'Tap each photo to add alt text and a caption. '}`;
+        status(`${addedText}${problems.join(' ')}`.trim());
+        // Ask for the alt text at once, unless the user opened a sheet meanwhile.
+        const index = gallery.indexOf(lastAdded);
+        if (one && index !== -1 && !photoSheet.open) openPhoto(index);
+    });
+
+    // ----- Write / Photos / Preview -----
     for (const button of container.querySelectorAll('[data-mode]')) {
         button.addEventListener('click', () => {
-            const showPreview = button.dataset.mode === 'preview';
+            const mode = button.dataset.mode;
             for (const other of container.querySelectorAll('[data-mode]')) other.setAttribute('aria-pressed', String(other === button));
-            if (showPreview) {
+            if (mode === 'preview') {
                 // The same renderer and options as build.js: marked.parse(body) (decision 25).
                 preview.replaceChildren(sanitizeHtml(marked.parse(textarea.value)));
+                // A gallery page: the photos follow the text, as on the site.
+                if (isGallery && gallery.length) {
+                    const grid = document.createElement('div');
+                    grid.className = 'preview-gallery';
+                    for (const item of gallery.filter(isPhoto)) {
+                        const photoPath = galleryImagePath(item.path);
+                        if (!photoPath) {
+                            const note = document.createElement('span');
+                            note.className = 'preview-image';
+                            note.textContent = `Image: ${textOf(item.alt ?? item.caption) || '(no alt text)'} (${textOf(item.path) || 'no path'})`;
+                            grid.append(note);
+                            continue;
+                        }
+                        const figure = document.createElement('figure');
+                        const img = document.createElement('img');
+                        img.alt = textOf(item.alt ?? item.caption);
+                        img.dataset.imagePath = photoPath;
+                        figure.append(img);
+                        if (textOf(item.caption)) {
+                            const caption = document.createElement('figcaption');
+                            caption.textContent = textOf(item.caption);
+                            figure.append(caption);
+                        }
+                        grid.append(figure);
+                    }
+                    preview.append(grid);
+                }
                 showImages();
             }
-            preview.hidden = !showPreview;
-            textarea.hidden = showPreview;
-            $('.editor-toolbar').hidden = showPreview;
+            if (mode === 'photos') renderPhotos();
+            preview.hidden = mode !== 'preview';
+            textarea.hidden = mode !== 'write';
+            $('.editor-toolbar').hidden = mode !== 'write';
+            if (photos) photos.hidden = mode !== 'photos';
         });
     }
 
@@ -554,6 +806,8 @@ export async function editorScreen(container, [siteId, path]) {
             const taken = [...onGitHub.map(file => file.name), ...namesInText(currentText(), folder), ...pendingNames()];
             const name = imageName(oldName, oldName.split('.').pop(), taken);
             textarea.value = replaceImagePath(textarea.value, markdownPath(image.path), markdownPath(folder + name));
+            // A gallery photo: its path in the images: list changes too.
+            gallery = gallery.map(item => (isPhoto(item) && galleryImagePath(item.path) === image.path ? { ...item, path: markdownPath(folder + name) } : item));
             image.path = folder + name;
             notes.push(`A file with the name ${oldName} exists on GitHub, so the app changed the image name to ${name}.`);
         }
@@ -624,6 +878,7 @@ export async function editorScreen(container, [siteId, path]) {
                 // The images are on GitHub now. The Preview keeps showing them without a download.
                 for (const image of images) imageUrls.set(image.path, Promise.resolve(dataUrl(image)));
                 pendingImages = pendingImages.filter(image => !images.includes(image));
+                if (photos && !photos.hidden) renderPhotos(); // The "Not published" marks go away.
             } else {
                 saved = await saveFile({
                     owner: site.owner,

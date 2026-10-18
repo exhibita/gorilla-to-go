@@ -23,17 +23,19 @@ export function markdownPath(repoPath) {
 }
 
 // ./images/... in the page → src/images/..., or null for any other address.
+// Each part is decoded on its own (markdownPath encodes & , + and others too); a part that decodes
+// to a "/" is refused.
 export function repoImagePath(address) {
-    let path;
+    const value = String(address ?? '');
+    if (!value.startsWith('./images/')) return null;
+    let parts;
     try {
-        path = decodeURI(String(address ?? ''));
+        parts = value.slice(2).split('/').map(part => decodeURIComponent(part));
     } catch {
         return null;
     }
-    if (!path.startsWith('./images/')) return null;
-    const rest = path.slice(2);
-    if (rest.split('/').some(part => part === '' || part === '.' || part === '..')) return null;
-    return `src/${rest}`;
+    if (parts.some(part => part === '' || part === '.' || part === '..' || part.includes('/'))) return null;
+    return `src/${parts.join('/')}`;
 }
 
 // A file name from the name of the photo, with the extension of the new copy. -2, -3 when the name is
@@ -70,6 +72,28 @@ export function fitSize(width, height, max = MAX_WIDTH) {
 export function markdownImage(alt, path) {
     const text = String(alt ?? '').replace(/\s+/g, ' ').trim().replace(/[\\[\]]/g, '\\$&');
     return `![${text}](${path})`;
+}
+
+// A copy of the gallery images: list of the front matter. An empty list when there is no list.
+export function galleryItems(data) {
+    return Array.isArray(data?.images) ? structuredClone(data.images) : [];
+}
+
+// The repository file of a gallery image path, as the build reads it (it adds ./ to a path without
+// it), or null for an address that is not a file of the site.
+export function galleryImagePath(path) {
+    if (typeof path !== 'string') return null;
+    const value = path.trim();
+    if (/^[a-z][a-z0-9+.-]*:|^\/|^\.\.\//i.test(value)) return null;
+    return repoImagePath(value.startsWith('./') ? value : `./${value}`);
+}
+
+// A copy of the list with one item moved. A place outside the list changes nothing.
+export function moveItem(list, from, to) {
+    const copy = [...list];
+    if (from < 0 || from >= copy.length || to < 0 || to >= copy.length) return copy;
+    copy.splice(to, 0, ...copy.splice(from, 1));
+    return copy;
 }
 
 // Put a block (for example an image line) at the cursor, as its own paragraph: blank lines before

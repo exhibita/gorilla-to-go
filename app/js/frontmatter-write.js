@@ -87,3 +87,54 @@ export function setFields(raw, fields) {
     }
     return lines.join('\n');
 }
+
+// A value in an images: item. A simple path stays plain, as in the template; other text is quoted.
+function itemValue(key, value) {
+    if (value === null || value === undefined) return '';
+    if (typeof value !== 'string') return String(value);
+    // Only a value with a "/": a plain true, null, 1e3 or 2024-01-01 would not read back as text.
+    return key === 'path' && /^[\w./-]+$/.test(value) && value.includes('/') && !value.startsWith('-') ? value : yamlText(value);
+}
+
+// The lines of the images: block. An empty text value is left out (the build then uses the caption
+// as the alt text).
+function imagesLines(items) {
+    const lines = ['images:'];
+    for (const item of items) {
+        if (item === null || typeof item !== 'object') {
+            lines.push(`  - ${typeof item === 'string' ? yamlText(item) : String(item)}`);
+            continue;
+        }
+        const entries = Object.entries(item).filter(([, value]) => value !== '' && value !== undefined);
+        entries.forEach(([key, value], i) => {
+            const text = itemValue(key, value);
+            lines.push(`${i === 0 ? '  - ' : '    '}${key}:${text === '' ? '' : ` ${text}`}`);
+        });
+    }
+    return lines;
+}
+
+// Set the gallery images: list (decision 21). Only the images: block changes, and only when the list
+// changed. The list items are written with two spaces before "-".
+export function setImages(raw, items) {
+    const parsed = parseFrontmatter(`---\n${raw}\n---\n`);
+    if (parsed.error) return raw;
+    const current = Array.isArray(parsed.data.images) ? parsed.data.images : [];
+    const hasKey = Object.hasOwn(parsed.data, 'images');
+    if (imagesLines(current).join('\n') === imagesLines(items).join('\n') && (hasKey || items.length === 0)) return raw;
+
+    const lines = raw === '' ? [] : raw.split('\n');
+    const start = lines.findIndex(line => /^images[ \t]*:/.test(line));
+    if (start === -1) return [...lines, ...imagesLines(items)].join('\n');
+    // The key line, then the lines of its list: indented lines and items at column 0. Blank lines and
+    // comments after the last item stay (a comment there can be about the next key). Comments between
+    // the items go away when the list changes.
+    let end = start + 1;
+    for (let i = start + 1; i < lines.length; i++) {
+        if (lines[i].trim() === '' || lines[i].trim().startsWith('#')) continue;
+        if (indentOf(lines[i]) === 0 && !lines[i].startsWith('-')) break;
+        end = i + 1;
+    }
+    lines.splice(start, end - start, ...imagesLines(items));
+    return lines.join('\n');
+}
