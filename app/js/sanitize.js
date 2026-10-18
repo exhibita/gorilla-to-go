@@ -1,6 +1,7 @@
 // Make the Preview HTML safe. marked passes raw HTML in a page through as it is, and the page text
 // comes from the repository, so only an allowlist of elements and attributes stays. The CSP is the
 // second line of defense. DOMParser makes an inert document: nothing in it runs or loads.
+import { repoImagePath } from './images.js';
 
 const KEEP = new Set([
     'A', 'ABBR', 'B', 'BLOCKQUOTE', 'BR', 'CODE', 'DD', 'DEL', 'DETAILS', 'DIV', 'DL', 'DT', 'EM',
@@ -70,10 +71,21 @@ function clean(node, doc) {
             child.setAttribute('disabled', '');
         }
         if (tag === 'IMG') {
-            // Images come with image upload (step 7). Show the alt text and the path, and load nothing.
+            // An image of the site (./images/...): the editor shows it from the device or from GitHub
+            // as a data: URL. Until then it loads nothing.
+            const src = child.getAttribute('src');
+            const imagePath = repoImagePath(src);
+            child.removeAttribute('src');
+            if (imagePath) {
+                child.setAttribute('data-image-path', imagePath);
+                child.setAttribute('alt', child.getAttribute('alt') ?? '');
+                continue;
+            }
+            // Other images (for example on another website) cannot load in the app (CSP). Show the
+            // alt text and the address.
             const note = doc.createElement('span');
             note.className = 'preview-image';
-            note.textContent = `Image: ${child.getAttribute('alt') || '(no alt text)'} (${child.getAttribute('src') || 'no path'})`;
+            note.textContent = `Image: ${child.getAttribute('alt') || '(no alt text)'} (${src || 'no path'})`;
             child.replaceWith(note);
             continue;
         }

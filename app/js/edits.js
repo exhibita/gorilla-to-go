@@ -4,14 +4,15 @@ import * as db from './db.js';
 
 const key = (siteId, path) => `${siteId} ${path}`;
 
-// { key, siteId, path, baseSha, text, savedAt } or undefined.
+// { key, siteId, path, baseSha, text, images, savedAt } or undefined.
 export function getLocalEdit(siteId, path) {
     return db.get('edits', key(siteId, path));
 }
 
 // baseSha: the SHA of the file the user opened. A save with an old SHA is refused by GitHub.
-export function saveLocalEdit({ siteId, path, baseSha, text }) {
-    return db.put('edits', { key: key(siteId, path), siteId, path, baseSha: baseSha ?? null, text, savedAt: Date.now() });
+// images: the photos that the text uses and that are not on GitHub yet: [{ path, base64, mimeType }].
+export function saveLocalEdit({ siteId, path, baseSha, text, images = [] }) {
+    return db.put('edits', { key: key(siteId, path), siteId, path, baseSha: baseSha ?? null, text, images, savedAt: Date.now() });
 }
 
 export function deleteLocalEdit(siteId, path) {

@@ -6,4 +6,5 @@
 - **Links page support:** a list editor for the `links:` frontmatter. Reuse the gallery list-editing code.
 - **CodeMirror 6** editor, if the textarea is not enough.
 - **Image cleanup:** remove images that no page uses.
+- **Lightbox for blog post images** (a Vanilla Gorilla template change, not a GTG change): when a blog post has two or more images, `build.js` makes each image open a large view with previous and next, as the gallery does. Use the same CSS-only lightbox (`:target`), with IDs that do not clash with the gallery (`#img1`). GTG needs no change: it writes plain Markdown images. Decide whether a post with one image also gets the large view.
 - **AI assist:** for example, "draft this post for me".
