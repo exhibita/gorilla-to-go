@@ -4,7 +4,9 @@ import { getTemplateVersion, REQUIRED_TEMPLATE_VERSION } from '../github.js';
 import { getToken } from '../auth.js';
 import { getSite, listSites, removeSite, setLastSiteId, updateSite } from '../sites.js';
 import { loadPages, deviceStore } from '../pages.js';
-import { filterPages, formatDate, listTimeText, sortPages, TYPE_LABELS } from '../pages-logic.js';
+import { listNewPages } from '../edits.js';
+import { parseFrontmatter } from '../frontmatter.js';
+import { classifyPath, filterPages, formatDate, listTimeText, sortPages, TYPE_LABELS } from '../pages-logic.js';
 import { escapeHtml, icon } from '../dom.js';
 import { navigate } from '../router.js';
 import { themeToggleHtml, bindThemeToggles } from '../theme.js';
@@ -102,8 +104,13 @@ export async function siteScreen(container, [id]) {
             <span class="muted small" id="list-status" aria-live="polite"></span>
             <button type="button" class="btn-small" id="refresh">${icon('refresh', 16)} Refresh</button>
         </div>
+        <section id="new-pages" hidden aria-labelledby="new-pages-title">
+            <h2 class="card-title section-title" id="new-pages-title">Not published</h2>
+            <ul class="page-list" id="new-page-list"></ul>
+        </section>
         <ul class="page-list" id="page-list"></ul>
         <div id="list-message"></div>
+        <a class="fab" href="#/site/${encodeURIComponent(site.id)}/new" aria-label="New page">${icon('plus', 28, 2.2)}</a>
     </div>
 
     <dialog class="sheet" id="switcher" aria-labelledby="switcher-title">
@@ -135,6 +142,7 @@ export async function siteScreen(container, [id]) {
         <div class="sheet-body">
             <h2 class="sheet-title" id="remove-title">Remove ${name}?</h2>
             <p>The app deletes this site, its token and its saved pages from this device. The repository on GitHub does not change.</p>
+            <p class="banner" id="remove-new-pages" hidden></p>
             <p class="message-error" id="remove-error" role="alert"></p>
             <button type="button" class="btn btn-danger" id="confirm-remove">Remove site</button>
             <button type="button" class="btn btn-secondary" data-close>Cancel</button>
@@ -163,8 +171,15 @@ export async function siteScreen(container, [id]) {
         });
     }
     $('#switcher a[href="#/add"]').addEventListener('click', () => $('#switcher').close());
-    $('#open-remove').addEventListener('click', () => {
+    $('#open-remove').addEventListener('click', async () => {
         $('#site-sheet').close();
+        // New pages that are not published exist only on this device: say that they go too.
+        const newPages = await listNewPages(site.id).catch(() => []);
+        const note = $('#remove-new-pages');
+        note.textContent = newPages.length === 1
+            ? 'This site has 1 new page that is not published. The app deletes it too.'
+            : `This site has ${newPages.length} new pages that are not published. The app deletes them too.`;
+        note.hidden = newPages.length === 0;
         $('#remove').showModal();
     });
     $('#confirm-remove').addEventListener('click', async () => {
@@ -268,6 +283,21 @@ export async function siteScreen(container, [id]) {
     else if (saved) pages = sortPages(saved.pages);
     renderList();
     load();
+
+    // New pages that are kept on this device and not published yet (build step 5).
+    listNewPages(site.id).then(newPages => {
+        if (controller.signal.aborted || newPages.length === 0) return;
+        $('#new-page-list').innerHTML = newPages.map(edit => {
+            const kind = classifyPath(edit.path);
+            const title = parseFrontmatter(edit.text).data.title || kind.slug;
+            return `<li><a class="page-card" href="#/site/${encodeURIComponent(site.id)}/edit/${encodeURIComponent(edit.path)}">
+                <span class="page-card-text">
+                    <span class="page-meta"><span class="type-label type-label--${kind.type}">${TYPE_LABELS[kind.type]}</span><span class="draft-label">Not published</span></span>
+                    <span class="page-card-title">${escapeHtml(String(title))}</span>
+                </span>${icon('chevronRight', 18)}</a></li>`;
+        }).join('');
+        $('#new-pages').hidden = false;
+    }).catch(() => {});
 
     // ----- Template version -----
     getToken(site.id)

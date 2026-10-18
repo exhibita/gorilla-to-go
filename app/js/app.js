@@ -7,6 +7,7 @@ import { addSiteScreen } from './screens/add-site.js';
 import { siteScreen } from './screens/site.js';
 import { pageScreen } from './screens/page.js';
 import { editorScreen } from './screens/editor.js';
+import { newPageScreen } from './screens/new-page.js';
 import { tokenHelpScreen, upgradeHelpScreen } from './screens/help.js';
 
 // "#/": open the last site, else the first site, else the Welcome screen (decision 13).
@@ -28,6 +29,7 @@ route(/^#\/add$/, addSiteScreen);
 route(/^#\/site\/([^/]+)$/, siteScreen);
 route(/^#\/site\/([^/]+)\/page\/(.+)$/, pageScreen);
 route(/^#\/site\/([^/]+)\/edit\/(.+)$/, editorScreen);
+route(/^#\/site\/([^/]+)\/new$/, newPageScreen);
 route(/^#\/help\/token$/, tokenHelpScreen);
 route(/^#\/help\/upgrade$/, upgradeHelpScreen);
 

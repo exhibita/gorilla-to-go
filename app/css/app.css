@@ -712,3 +712,51 @@ button, input, textarea { font: inherit; color: inherit; }
 .btn .icon, .btn svg { flex: none; }
 
 .error-details { margin: 0; padding: 10px 12px; border-radius: var(--radius); background: var(--bg-2); color: var(--muted); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- New page ---------- */
+/* "New page": a round sage button at the bottom right (design.md). */
+.fab {
+    position: fixed;
+    right: max(20px, calc((100vw - 560px) / 2 + 20px));
+    bottom: calc(28px + env(safe-area-inset-bottom));
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--on-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+    z-index: 3;
+}
+
+.fab:hover { background: var(--primary-hover); color: var(--on-primary); }
+
+/* Room at the end of the list, so the round button does not cover the last page. */
+#page-list { padding-bottom: 88px; }
+
+.section-title { margin: 0 0 10px; }
+
+.editor-head-actions { display: flex; gap: 8px; }
+
+.type-choice { margin: 0; padding: 0; border: 0; min-width: 0; }
+.type-choice legend { padding: 0; margin-bottom: 6px; font-size: 15px; font-weight: 600; }
+.type-options { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.type-option {
+    min-height: 44px;
+    padding: 0 16px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.type-option:has(input:checked) { border-color: var(--primary); background: var(--primary); color: var(--on-primary); font-weight: 600; }
+.type-option input { margin: 0; accent-color: var(--primary); }
+.type-option:has(input:focus-visible) { outline: 3px solid var(--primary); outline-offset: 2px; }
