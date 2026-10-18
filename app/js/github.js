@@ -224,3 +224,38 @@ export async function getBlobText({ owner, repo, sha, token, fetch = globalThis.
 }
 
 export { CancelledError };
+
+// Encode text as UTF-8 base64 (the contents API needs base64).
+function encodeBase64(text) {
+    const bytes = new TextEncoder().encode(text);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
+}
+
+// Save a changed file as one commit on the branch. sha is the SHA of the file that the user opened:
+// when the file changed on GitHub since then, GitHub refuses the save (409), so nothing is overwritten
+// (mvp-plan section 9). Returns { sha } of the saved file.
+export async function saveFile({ owner, repo, branch, path, text, sha, message, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    const filePath = String(path).split('/').map(encodeURIComponent).join('/');
+    let response;
+    try {
+        response = await request(fetch, token, `${repoPath(owner, repo)}/contents/${filePath}`, {
+            method: 'PUT',
+            body: { message, content: encodeBase64(text), sha, branch },
+            signal,
+            timeoutMs
+        });
+    } catch (err) {
+        if (err instanceof CancelledError) throw err;
+        throw new GitHubError('No connection to GitHub', { offline: true });
+    }
+    if (response.status === 409 || response.status === 422) {
+        throw Object.assign(new GitHubError('This page changed on GitHub after you opened it.'), { conflict: true });
+    }
+    if (response.status === 401) throw new GitHubError('Token not accepted');
+    if (response.status === 403 || response.status === 404) throw new GitHubError('No write access');
+    if (!response.ok) throw new GitHubError(`GitHub error ${response.status}`);
+    const data = await response.json();
+    return { sha: data.content.sha };
+}

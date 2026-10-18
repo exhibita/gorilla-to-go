@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRepoInput, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText } from '../app/js/github.js';
+import { parseRepoInput, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText, saveFile } from '../app/js/github.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -293,4 +293,41 @@ test('getBlobText decodes a blob as UTF-8 text', async () => {
     const routes = { [`GET ${REPO}/git/blobs/s1`]: () => json(200, { encoding: 'base64', content: Buffer.from(text).toString('base64') }) };
     const { fetch } = fakeFetch(routes);
     assert.equal(await getBlobText({ owner: 'exhibita', repo: 'gtg-test-site', sha: 's1', token: TOKEN, fetch }), text);
+});
+
+// ---------- saveFile ----------
+
+test('saveFile sends the text, the old SHA and the branch, and returns the new SHA', async () => {
+    const sent = [];
+    const fetch = async (url, init) => {
+        sent.push({ url, method: init.method, body: JSON.parse(init.body), auth: init.headers.Authorization });
+        return json(200, { content: { sha: 'NEWSHA' }, commit: { sha: 'COMMIT' } });
+    };
+    const text = '---\ntitle: "Café ✓"\n---\nBody\n';
+    const result = await saveFile({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path: 'src/blog/my post/index.md', text, sha: 'OLDSHA', message: 'Edit', token: TOKEN, fetch });
+    assert.deepEqual(result, { sha: 'NEWSHA' });
+    assert.equal(sent[0].method, 'PUT');
+    assert.equal(sent[0].url, `${API}${REPO}/contents/src/blog/my%20post/index.md`);
+    assert.equal(sent[0].auth, `Bearer ${TOKEN}`);
+    assert.equal(sent[0].body.sha, 'OLDSHA');
+    assert.equal(sent[0].body.branch, 'main');
+    assert.equal(sent[0].body.message, 'Edit');
+    assert.equal(Buffer.from(sent[0].body.content, 'base64').toString('utf8'), text);
+});
+
+test('saveFile stops when the file changed on GitHub, so nothing is overwritten', async () => {
+    for (const status of [409, 422]) {
+        const fetch = async () => json(status, { message: 'src/x/index.md does not match OLDSHA' });
+        await assert.rejects(
+            saveFile({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path: 'src/x/index.md', text: 'x', sha: 'OLDSHA', message: 'Edit', token: TOKEN, fetch }),
+            err => err.conflict === true && err.message === 'This page changed on GitHub after you opened it.'
+        );
+    }
+});
+
+test('saveFile reports a refused token, no write access and no connection', async () => {
+    const save = fetch => saveFile({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path: 'src/x/index.md', text: 'x', sha: 'S', message: 'Edit', token: TOKEN, fetch });
+    await assert.rejects(save(async () => json(401, {})), { message: 'Token not accepted' });
+    await assert.rejects(save(async () => json(403, {})), { message: 'No write access' });
+    await assert.rejects(save(async () => { throw new TypeError('Failed to fetch'); }), err => err.offline === true);
 });

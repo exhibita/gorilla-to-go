@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadPages, getPageText, memoryStore } from '../app/js/pages.js';
+import { loadPages, getPageText, memoryStore, recordSavedPage } from '../app/js/pages.js';
 
 const API = 'https://api.github.com';
 const REPO = '/repos/exhibita/gtg-test-site';
@@ -158,4 +158,26 @@ test('no progress is reported after the load is stopped', async () => {
     await load.catch(() => {});
     await new Promise(resolve => setTimeout(resolve, 100));
     assert.ok(progress.every(p => p.done <= 2), `progress after the stop: ${JSON.stringify(progress.at(-1))}`);
+});
+
+test('recordSavedPage updates the saved list and text, and the next load reads the tree again', async () => {
+    const github = fakeGitHub({ 'src/blog/a/index.md': md('A', '2026-01-01'), 'src/blog/b/index.md': md('B', '2026-01-02') });
+    const store = memoryStore();
+    await loadPages({ site, token: TOKEN, fetch: github.fetch, store });
+
+    // The app saves a change to page A (GitHub gives it a new SHA).
+    const newText = md('A edited', '2026-01-01');
+    await recordSavedPage({ site, path: 'src/blog/a/index.md', sha: 'sha-new-a', text: newText, store });
+    const saved = await store.getPageList(site.id);
+    assert.equal(saved.pages.find(p => p.path === 'src/blog/a/index.md').title, 'A edited');
+    assert.equal(saved.treeSha, null);
+    assert.equal(await store.getBlob('sha-new-a'), newText);
+
+    // The next load reads the tree (one more request), but not the file text it already has.
+    github.files['src/blog/a/index.md'] = newText;
+    github.treeSha = 'TREE2';
+    github.calls.length = 0;
+    const result = await loadPages({ site, token: TOKEN, fetch: github.fetch, store });
+    assert.ok(github.calls.some(c => c.includes('/git/trees/')));
+    assert.deepEqual(result.pages.map(p => p.title), ['B', 'A edited']);
 });
