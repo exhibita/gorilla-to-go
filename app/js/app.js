@@ -33,6 +33,14 @@ route(/^#\/help\/upgrade$/, upgradeHelpScreen);
 
 startRouter(document.getElementById('app'));
 
+// For boot-check.js: the app runs. A later start failure can recover again.
+window.__gtgStarted = true;
+try {
+    sessionStorage.removeItem('gtg.recovered');
+} catch {
+    // No storage.
+}
+
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {
         // No offline support (for example over plain HTTP on a phone). The app still works online.

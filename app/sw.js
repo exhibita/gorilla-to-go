@@ -4,7 +4,6 @@
 // When you release a new version, VERSION changes with app/js/version.js (a test checks this).
 const VERSION = '0.3.0';
 const CACHE = `gtg-${VERSION}`;
-const NETWORK_WAIT_MS = 3000;
 
 const ASSETS = [
     './',
@@ -25,6 +24,7 @@ const ASSETS = [
     'img/logo.png',
     'js/app.js',
     'js/auth.js',
+    'js/boot-check.js',
     'js/db.js',
     'js/dom.js',
     'js/edits.js',
@@ -76,35 +76,19 @@ self.addEventListener('fetch', event => {
     if (request.method !== 'GET' || url.origin !== self.location.origin) return;
 
     // Network first, so the app is always up to date when it is online. Each good response also
-    // refreshes the cache. Offline, or with no answer in NETWORK_WAIT_MS (a weak signal), the cached
-    // copy is used. Screens (navigations) all use index.html, because the app uses hash routes.
+    // refreshes the cache. The cached copy is used only when there is no connection: a time limit
+    // would mix new files with cached files of an older version, and then the app cannot start.
+    // Screens (navigations) all use index.html, because the app uses hash routes.
     const cacheKey = request.mode === 'navigate' ? 'index.html' : request;
-    const network = fetch(request).then(response => {
-        if (response.ok && response.type === 'basic') {
-            const copy = response.clone();
-            event.waitUntil(caches.open(CACHE).then(cache => cache.put(cacheKey, copy)));
-        }
-        return response;
-    });
-    const cached = () => caches.match(cacheKey, { ignoreSearch: true });
-
-    event.respondWith(new Promise(resolve => {
-        let answered = false;
-        const answer = response => {
-            if (!answered) {
-                answered = true;
-                resolve(response);
-            }
-        };
-        const timer = setTimeout(() => cached().then(copy => copy && answer(copy)), NETWORK_WAIT_MS);
-        network
+    event.respondWith(
+        fetch(request)
             .then(response => {
-                clearTimeout(timer);
-                answer(response);
+                if (response.ok && response.type === 'basic') {
+                    const copy = response.clone();
+                    event.waitUntil(caches.open(CACHE).then(cache => cache.put(cacheKey, copy)));
+                }
+                return response;
             })
-            .catch(() => {
-                clearTimeout(timer);
-                cached().then(copy => answer(copy || Response.error()));
-            });
-    }));
+            .catch(() => caches.match(cacheKey, { ignoreSearch: true }).then(cached => cached || Response.error()))
+    );
 });
