@@ -6,12 +6,13 @@ import { marked } from '../../vendor/marked/marked.esm.js';
 import { getToken } from '../auth.js';
 import { getSite } from '../sites.js';
 import { getPageText, recordSavedPage, deviceStore } from '../pages.js';
-import { parseFrontmatter } from '../frontmatter.js';
-import { splitPage, composePage, setFields, setImages, editedBody } from '../frontmatter-write.js';
+import { parseFrontmatter, isDraft } from '../frontmatter.js';
+import { splitPage, composePage, setFields, setImages, setDraft, editedBody } from '../frontmatter-write.js';
+import { watchBuild, buildStatusHtml, rememberCommit } from '../build-status.js';
 import { classifyPath, listTimeText, TYPE_LABELS } from '../pages-logic.js';
 import { toggleWrap, toggleLinePrefix, insertLink, createHistory } from '../editor-logic.js';
 import { getLocalEdit, saveLocalEdit, deleteLocalEdit } from '../edits.js';
-import { saveFile, pathExists, commitFiles, listFolder, getImageDataUrl, gitBlobSha, base64ToBytes } from '../github.js';
+import { saveFile, pathExists, commitFiles, listFolder, getImageDataUrl, gitBlobSha, base64ToBytes, listBuildRuns } from '../github.js';
 import { imageFolder, imageName, markdownPath, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, galleryItems, galleryImagePath, moveItem } from '../images.js';
 import { prepareImage, ImageError } from '../image-resize.js';
 import { sanitizeHtml } from '../sanitize.js';
@@ -107,7 +108,7 @@ export async function editorScreen(container, [siteId, path]) {
         const parsed = parseFrontmatter(text);
         frontmatterError = parsed.error;
         const value = key => (parsed.data[key] == null || typeof parsed.data[key] === 'object' ? '' : String(parsed.data[key]));
-        fields = { title: value('title'), date: value('date'), description: value('description') };
+        fields = { title: value('title'), date: value('date'), description: value('description'), draft: isDraft(parsed.data) };
         gallery = galleryItems(parsed.data);
         hasCover = Boolean(parsed.data.cover); // As the build: cover: false is no cover.
     };
@@ -118,7 +119,7 @@ export async function editorScreen(container, [siteId, path]) {
     const bodyText = () => editedBody(textarea.value, parts.body, parts.eol);
     const currentText = () => {
         if (frontmatterError) return composePage({ ...parts, body: bodyText() });
-        let raw = setFields(parts.raw, fields);
+        let raw = setDraft(setFields(parts.raw, fields), fields.draft);
         if (isGallery) raw = setImages(raw, gallery);
         return composePage({ ...parts, raw, body: bodyText(), hasFrontmatter: parts.hasFrontmatter || raw !== '' });
     };
@@ -136,7 +137,7 @@ export async function editorScreen(container, [siteId, path]) {
     </header>
     <div class="editor-head">
         <div class="editor-meta-row">
-            <span class="type-label type-label--${kind.type}">${TYPE_LABELS[kind.type]}</span>
+            <span class="page-meta"><span class="type-label type-label--${kind.type}">${TYPE_LABELS[kind.type]}</span><span class="draft-label" id="draft-label" hidden>Draft</span></span>
             <span class="editor-head-actions">
                 ${isNew ? '<button type="button" class="btn-small" id="open-delete-new" aria-haspopup="dialog">Delete</button>' : ''}
                 <button type="button" class="btn-small" id="open-details" aria-haspopup="dialog">${icon('details', 16)} Details</button>
@@ -158,6 +159,7 @@ export async function editorScreen(container, [siteId, path]) {
         </div>` : ''}
     </div>
     <p class="editor-status" id="editor-status" aria-live="polite"></p>
+    <p class="build-status build-status--editor" id="build-status" aria-live="polite" hidden></p>
     <div class="editor-toolbar" role="toolbar" aria-label="Formatting">
         ${TOOLBAR.map(tool => `<button type="button" data-tool="${tool.id}" aria-label="${tool.label}">${tool.html}</button>`).join('')}
     </div>
@@ -195,6 +197,13 @@ export async function editorScreen(container, [siteId, path]) {
                 <textarea class="input input-multiline" id="field-description" rows="3"></textarea>
                 <div class="field-hint">For search engines and the RSS feed.</div>
             </div>
+            <label class="switch-row" for="field-draft">
+                <input type="checkbox" id="field-draft" aria-describedby="field-draft-hint">
+                <span class="switch-text">
+                    <span class="switch-title">Draft</span>
+                    <span class="field-hint" id="field-draft-hint">The site does not show a draft. It is saved on GitHub.</span>
+                </span>
+            </label>
             <p class="message-error" id="details-error" role="alert"></p>
             <button type="submit" class="btn btn-primary">Apply</button>
             <button type="button" class="btn btn-secondary" data-close>Cancel</button>
@@ -257,6 +266,10 @@ export async function editorScreen(container, [siteId, path]) {
     };
     const showTitle = () => {
         $('#editor-title').textContent = (frontmatterError ? '' : fields.title) || kind.slug;
+        // A draft: the Draft label shows, and Publish saves the draft to GitHub.
+        const draft = !frontmatterError && fields.draft;
+        $('#draft-label').hidden = !draft;
+        $('#publish').textContent = draft ? 'Save draft' : 'Publish';
     };
 
     textarea.value = parts.body;
@@ -755,6 +768,7 @@ export async function editorScreen(container, [siteId, path]) {
         $('#field-title').value = fields.title;
         $('#field-date').value = /^\d{4}-\d{2}-\d{2}$/.test(fields.date) ? fields.date : '';
         $('#field-description').value = fields.description;
+        $('#field-draft').checked = fields.draft;
         $('#details-error').textContent = '';
         dateTouched = false;
         details.showModal();
@@ -772,7 +786,8 @@ export async function editorScreen(container, [siteId, path]) {
         fields = {
             title: typedTitle === fields.title.trim() ? fields.title : typedTitle,
             date: dateTouched ? $('#field-date').value : fields.date,
-            description: typedDescription === fields.description.trim() ? fields.description : typedDescription
+            description: typedDescription === fields.description.trim() ? fields.description : typedDescription,
+            draft: $('#field-draft').checked
         };
         showTitle();
         details.close();
@@ -818,6 +833,25 @@ export async function editorScreen(container, [siteId, path]) {
         return notes.join(' ');
     };
 
+    // ----- Publish status (mvp-plan section 6, screen 7) -----
+    // After a save, the line under the status follows the site build of the commit until it ends.
+    let buildWatch = null;
+    const followBuild = commitSha => {
+        buildWatch?.abort();
+        buildWatch = new AbortController();
+        const { signal } = buildWatch;
+        const line = $('#build-status');
+        watchBuild({
+            list: () => listBuildRuns({ owner: site.owner, repo: site.repo, branch: site.branch, headSha: commitSha ?? undefined, token, signal }),
+            sha: commitSha ?? undefined,
+            signal,
+            onChange: state => {
+                line.innerHTML = buildStatusHtml(state);
+                line.hidden = false;
+            }
+        });
+    };
+
     let publishing = false;
     const warnBeforeClose = event => {
         event.preventDefault();
@@ -838,11 +872,14 @@ export async function editorScreen(container, [siteId, path]) {
             return;
         }
         let renameNote = '';
+        // A draft goes to GitHub too, but the site does not show it (decision 22).
+        const asDraft = !frontmatterError && fields.draft;
+        const working = asDraft ? 'Saving the draft. Keep the app open until this is complete.' : 'Publishing. Keep the app open until this is complete.';
         publishing = true;
         $('#publish').disabled = true;
         $('#open-delete-new')?.setAttribute('disabled', '');
         window.addEventListener('beforeunload', warnBeforeClose);
-        status('Publishing. Keep the app open until this is complete.');
+        status(working);
         await keepNow();
         try {
             if (isNew) {
@@ -873,7 +910,7 @@ export async function editorScreen(container, [siteId, path]) {
                     token,
                     onProgress: ({ done, total }) => status(done < total
                         ? `Uploading image ${done + 1} of ${total}. Keep the app open until this is complete.`
-                        : 'Publishing. Keep the app open until this is complete.')
+                        : working)
                 });
                 // The images are on GitHub now. The Preview keeps showing them without a download.
                 for (const image of images) imageUrls.set(image.path, Promise.resolve(dataUrl(image)));
@@ -904,7 +941,11 @@ export async function editorScreen(container, [siteId, path]) {
             // Keep what the user typed during Publish (keepNow deletes the kept copy only when the
             // text is the same as the published text).
             await keepNow();
-            status(`Published at ${listTimeText(Date.now())}. The site updates in a few minutes.`);
+            status(asDraft
+                ? `Saved as a draft at ${listTimeText(Date.now())}. The site does not show this page.`
+                : `Published at ${listTimeText(Date.now())}.`);
+            rememberCommit(site.id, saved.commitSha); // The Pages list follows this build too.
+            followBuild(saved.commitSha);
         } catch (err) {
             if (err.conflict && isNew) {
                 status('Not published: a page with this address exists on GitHub. Your text is kept on this device.');
@@ -958,6 +999,7 @@ export async function editorScreen(container, [siteId, path]) {
 
     return () => {
         controller.abort();
+        buildWatch?.abort();
         viewport?.removeEventListener('resize', fit);
         viewport?.removeEventListener('scroll', fit);
         document.removeEventListener('visibilitychange', keepOnHide);

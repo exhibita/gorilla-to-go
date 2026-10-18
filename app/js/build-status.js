@@ -1,5 +1,6 @@
 // Publish status (mvp-plan section 6, screen 7): "Publishing", "Live" or "Build failed", from the
 // GitHub Actions runs of a commit. The rules here have no network and no DOM, so they run in tests.
+import { escapeHtml } from './dom.js';
 
 // A run with one of these conclusions is a failed build.
 const FAILED = new Set(['failure', 'timed_out', 'startup_failure', 'action_required']);
@@ -49,6 +50,34 @@ const TEXTS = {
 export function buildStatusText({ state }) {
     const [label, sentence] = TEXTS[state] ?? TEXTS.error;
     return { label, sentence };
+}
+
+// The status line as HTML: a label chip, the sentence, and a link to the run on GitHub when it helps.
+// time (optional) is shown after a Live label, for example "3:04 PM".
+export function buildStatusHtml(status, { time = '' } = {}) {
+    const { label, sentence } = buildStatusText(status);
+    const busy = status.state === 'waiting' || status.state === 'publishing';
+    const linkStates = new Set(['publishing', 'failed', 'stopped', 'tooLong']);
+    const url = typeof status.url === 'string' && status.url.startsWith('https://github.com/') ? status.url : '';
+    const link = url && linkStates.has(status.state)
+        ? ` <a class="text-link text-link--inline" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Open the build on GitHub</a>`
+        : '';
+    const when = status.state === 'live' && time ? ` Last build: ${escapeHtml(time)}.` : '';
+    return `<span class="build-chip build-chip--${escapeHtml(status.state)}">${busy ? '<span class="spinner spinner--small" aria-hidden="true"></span>' : ''}${escapeHtml(label)}</span> <span>${escapeHtml(sentence)}${when}</span>${link}`;
+}
+
+// The last commit that this device made on each site, so the Pages list follows its build even
+// before GitHub starts the run.
+const recentCommits = new Map();
+const RECENT_MS = LIMIT_MS;
+
+export function rememberCommit(siteId, sha, now = Date.now()) {
+    if (sha) recentCommits.set(siteId, { sha, at: now });
+}
+
+export function recentCommit(siteId, now = Date.now()) {
+    const recent = recentCommits.get(siteId);
+    return recent && now - recent.at < RECENT_MS ? recent.sha : null;
 }
 
 // Wait ms, or less when the signal stops the wait.

@@ -1,6 +1,7 @@
 // The site screen: the Pages list (mvp-plan section 6, screen 3), with search and type filters.
 // The site sheet has the site details, the template version check, and "Remove this site".
-import { getTemplateVersion, REQUIRED_TEMPLATE_VERSION } from '../github.js';
+import { getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listBuildRuns } from '../github.js';
+import { watchBuild, buildStatusHtml, recentCommit } from '../build-status.js';
 import { getToken } from '../auth.js';
 import { getSite, listSites, removeSite, setLastSiteId, updateSite } from '../sites.js';
 import { loadPages, deviceStore } from '../pages.js';
@@ -16,7 +17,8 @@ const FILTERS = [
     { type: 'all', label: 'All' },
     { type: 'blog', label: 'Blog' },
     { type: 'page', label: 'Pages' },
-    { type: 'gallery', label: 'Galleries' }
+    { type: 'gallery', label: 'Galleries' },
+    { type: 'draft', label: 'Drafts' }
 ];
 
 // The search and filter stay the same when the user opens a page and comes back.
@@ -97,6 +99,7 @@ export async function siteScreen(container, [id]) {
     </div>
     <div class="screen-body">
         <h1 class="page-title" tabindex="-1">Pages</h1>
+        <p class="build-status" id="build-status" aria-live="polite" hidden></p>
         <div class="banner" id="template-banner" role="alert" hidden></div>
         <label class="search">
             ${icon('search', 18)}
@@ -266,6 +269,7 @@ export async function siteScreen(container, [id]) {
             lastLists.set(site.id, result);
             renderList();
             status(result.offline ? `No connection. This list is from ${listTimeText(result.fetchedAt)}.` : `Updated ${listTimeText(result.fetchedAt)}`);
+            if (!result.offline) followBuild(token);
             if (result.truncated) message('<p class="empty">The repository is very large. Some pages can be missing from the list.</p>');
         } catch (err) {
             if (!isCurrent()) return;
@@ -283,6 +287,29 @@ export async function siteScreen(container, [id]) {
     };
 
     $('#refresh').addEventListener('click', load);
+
+    // ----- Publish status (mvp-plan section 6, screen 7) -----
+    // The build of the last commit from this device (for 20 minutes), else the newest build of the branch.
+    let buildWatch = null;
+    controller.signal.addEventListener('abort', () => buildWatch?.abort());
+    const followBuild = token => {
+        buildWatch?.abort();
+        buildWatch = new AbortController();
+        const { signal } = buildWatch;
+        const sha = recentCommit(site.id) ?? undefined;
+        const line = $('#build-status');
+        watchBuild({
+            list: () => listBuildRuns({ owner: site.owner, repo: site.repo, branch: site.branch, headSha: sha, token, signal }),
+            sha,
+            signal,
+            onChange: state => {
+                // No builds at all, or no connection (the list says so): no line.
+                line.hidden = (state.state === 'none' && !sha) || state.state === 'offline';
+                const time = state.updatedAt ? listTimeText(Date.parse(state.updatedAt)) : '';
+                line.innerHTML = buildStatusHtml(state, { time });
+            }
+        });
+    };
 
     // Show the last list at once (this session, else the device cache), then look for changes.
     const remembered = lastLists.get(site.id);

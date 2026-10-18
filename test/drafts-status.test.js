@@ -4,7 +4,7 @@ import { setDraft } from '../app/js/frontmatter-write.js';
 import { parseFrontmatter, isDraft } from '../app/js/frontmatter.js';
 import { filterPages } from '../app/js/pages-logic.js';
 import { listBuildRuns, saveFile, deleteFile } from '../app/js/github.js';
-import { buildState, buildStatusText, watchBuild } from '../app/js/build-status.js';
+import { buildState, buildStatusText, buildStatusHtml, watchBuild, rememberCommit, recentCommit } from '../app/js/build-status.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -117,6 +117,25 @@ test('buildStatusText has a short label and a sentence for each state', () => {
     assert.equal(buildStatusText({ state: 'live' }).label, 'Live');
     assert.equal(buildStatusText({ state: 'publishing' }).label, 'Publishing');
     assert.equal(buildStatusText({ state: 'failed' }).label, 'Build failed');
+});
+
+test('buildStatusHtml escapes the text and links only to github.com', () => {
+    const failed = buildStatusHtml({ state: 'failed', url: 'https://github.com/o/r/actions/runs/1' });
+    assert.match(failed, /Build failed/);
+    assert.match(failed, /href="https:\/\/github\.com\/o\/r\/actions\/runs\/1"/);
+    assert.doesNotMatch(buildStatusHtml({ state: 'failed', url: 'javascript:alert(1)' }), /href/);
+    assert.doesNotMatch(buildStatusHtml({ state: 'live', url: 'https://github.com/x' }), /href/, 'no link when live');
+    assert.match(buildStatusHtml({ state: 'live' }, { time: '3:04 PM' }), /Last build: 3:04 PM/);
+    assert.match(buildStatusHtml({ state: 'publishing' }), /spinner/);
+});
+
+test('rememberCommit keeps the last commit of a site for 20 minutes', () => {
+    rememberCommit('s1', 'C9', 1000);
+    assert.equal(recentCommit('s1', 1000 + 60 * 1000), 'C9');
+    assert.equal(recentCommit('s1', 1000 + 21 * 60 * 1000), null);
+    assert.equal(recentCommit('other', 1000), null);
+    rememberCommit('s1', null, 5000);
+    assert.equal(recentCommit('s1', 5000), 'C9', 'no SHA: no change');
 });
 
 // ---------- watchBuild ----------
