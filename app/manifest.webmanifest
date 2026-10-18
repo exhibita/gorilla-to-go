@@ -1,0 +1,15 @@
+{
+  "name": "Gorilla To Go",
+  "short_name": "GTG",
+  "description": "Manage your Vanilla Gorilla sites from your phone.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8f6f2",
+  "theme_color": "#f8f6f2",
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

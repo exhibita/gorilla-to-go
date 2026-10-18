@@ -12,6 +12,23 @@ With GTG you can:
 
 GTG does not build the site. It commits Markdown files and images to the site's GitHub repository. The site's GitHub Actions workflow builds and deploys the site.
 
+## Development
+
+The app is plain HTML, CSS and JavaScript in `app/`. There is no build step. You need Node.js 22 or later.
+
+1. Run `npm run dev`.
+2. Open http://localhost:5173/.
+
+To run the tests, run `npm test`.
+
+To test on a phone, the app needs HTTPS:
+
+1. Run `npm run dev`.
+2. In a second terminal, run `ngrok http 5173`.
+3. On the phone, open the HTTPS address that ngrok shows.
+
+Only the `app/` folder is published.
+
 ## Documents
 
 | File | Contents |
