@@ -290,7 +290,7 @@ export async function saveFile({ owner, repo, branch, path, text, sha, message, 
     if (response.status === 403 || response.status === 404) throw new GitHubError('No write access');
     if (!response.ok) throw new GitHubError(`GitHub error ${response.status}`);
     const data = await response.json();
-    return { sha: data.content.sha };
+    return { sha: data.content.sha, commitSha: data.commit?.sha ?? null };
 }
 
 // True when a file or folder exists on the branch (to check the address of a new page).
@@ -342,14 +342,14 @@ export async function deleteFile({ owner, repo, branch, path, sha, message, toke
         response = await request(fetch, token, contentsPath, { method: 'DELETE', body: { message, sha, branch }, signal, timeoutMs });
     } catch (err) {
         if (err instanceof CancelledError) throw err;
-        if ((await fileNow())?.gone) return;
+        if ((await fileNow())?.gone) return { commitSha: null };
         throw new GitHubError('No connection to GitHub', { offline: true });
     }
-    if (response.ok) return;
+    if (response.ok) return { commitSha: (await response.json().catch(() => ({}))).commit?.sha ?? null };
     if (response.status === 401) throw new GitHubError('Token not accepted');
 
     const now = await fileNow();
-    if (now?.gone) return;
+    if (now?.gone) return { commitSha: null };
     if (now?.offline) throw new GitHubError('No connection to GitHub', { offline: true });
     if (now?.noBranch) throw new GitHubError(`Branch ${branch} not found`);
     if ((response.status === 409 || response.status === 422) && now?.sha && now.sha !== sha) {
@@ -380,7 +380,7 @@ const BLOB_TIMEOUT_MS = 60000;
 // The Git Data API has no SHA check as the contents API has, so the app does it: the page on the
 // branch must still be the page the user opened, and an image must not replace another file. The
 // branch is moved only forward (force: false). When the branch moved meanwhile, the app checks again.
-// onProgress({ done, total }) tells the image uploads. Returns { sha } of the page file.
+// onProgress({ done, total }) tells the image uploads. Returns { sha } of the page file and { commitSha }.
 export async function commitFiles({ owner, repo, branch, page, images = [], message, token, fetch = globalThis.fetch, onProgress = () => {}, signal, timeoutMs }) {
     const base = repoPath(owner, repo);
     const net = { signal, timeoutMs };
@@ -431,7 +431,7 @@ export async function commitFiles({ owner, repo, branch, page, images = [], mess
         const toSend = files.filter(file => onGitHub.get(file.path) !== file.sha);
 
         // An earlier publish (for example one that timed out) put everything there already.
-        if (pageNow === pageSha && toSend.length === 0) return { sha: pageSha };
+        if (pageNow === pageSha && toSend.length === 0) return { sha: pageSha, commitSha };
         if (pageNow !== (page.baseSha ?? null) && pageNow !== pageSha) {
             throw Object.assign(new GitHubError('This page changed on GitHub after you opened it.'), { conflict: true });
         }
@@ -466,11 +466,11 @@ export async function commitFiles({ owner, repo, branch, page, images = [], mess
         } catch (err) {
             if (!err.offline) throw err;
             // No answer: the update can still have reached GitHub. When the branch has the commit, it did.
-            if (await readRef() === newCommit.sha) return { sha: pageSha };
+            if (await readRef() === newCommit.sha) return { sha: pageSha, commitSha: newCommit.sha };
             timedOut = true;
             continue;
         }
-        if (!updated.refused) return { sha: pageSha };
+        if (!updated.refused) return { sha: pageSha, commitSha: newCommit.sha };
         // 422: usually the branch moved after the app read it: read it again and check again. When the
         // branch did not move, GitHub refused for another reason (for example a branch rule).
         if (await readRef() === commitSha) throw new GitHubError(`GitHub refused the publish: ${updated.refused}`);
@@ -488,6 +488,30 @@ export async function listFolder({ owner, repo, branch, path, token, fetch = glo
         if (err instanceof GitHubError && err.message === 'not found') return [];
         throw err;
     }
+}
+
+// The GitHub Actions runs of the branch (newest first), or of one commit (headSha), for the publish
+// status. Returns [{ sha, status, conclusion, url, createdAt, updatedAt }]. A token without the
+// Actions (read) permission gives an error with noAccess: true.
+export async function listBuildRuns({ owner, repo, branch, headSha, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    const query = `branch=${encodeURIComponent(branch)}&per_page=20${headSha ? `&head_sha=${encodeURIComponent(headSha)}` : ''}`;
+    let data;
+    try {
+        data = await getJson(fetch, token, `${repoPath(owner, repo)}/actions/runs?${query}`, { signal, timeoutMs }, 'no access');
+    } catch (err) {
+        if (err instanceof GitHubError && (err.message === 'no access' || err.message === 'GitHub error 403')) {
+            throw Object.assign(new GitHubError('No Actions access'), { noAccess: true });
+        }
+        throw err;
+    }
+    return (data.workflow_runs ?? []).map(run => ({
+        sha: run.head_sha,
+        status: run.status,
+        conclusion: run.conclusion,
+        url: run.html_url,
+        createdAt: run.created_at,
+        updatedAt: run.updated_at
+    }));
 }
 
 const IMAGE_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml' };

@@ -114,7 +114,7 @@ test('commitFiles puts the page and its images in one commit on the branch', asy
         onProgress: p => progress.push(p)
     }));
 
-    assert.deepEqual(result, { sha: gitSha(Buffer.from(NEW_TEXT)) });
+    assert.deepEqual(result, { sha: gitSha(Buffer.from(NEW_TEXT)), commitSha: state.ref });
     assert.deepEqual(head(state).parents, ['C1'], 'one new commit on top of the branch');
     assert.equal(head(state).message, 'Edit p with Gorilla To Go');
     assert.equal(head(state).files[PAGE], gitSha(Buffer.from(NEW_TEXT)));
@@ -215,7 +215,7 @@ test('commitFiles does not upload an image that GitHub has already', async () =>
 test('commitFiles: a ref update that timed out but reached GitHub is a success', async () => {
     const { state, fetch } = fakeGitHub();
     state.patchTimesOut = true;
-    assert.deepEqual(await commitFiles(args(fetch)), { sha: gitSha(Buffer.from(NEW_TEXT)) });
+    assert.deepEqual(await commitFiles(args(fetch)), { sha: gitSha(Buffer.from(NEW_TEXT)), commitSha: state.ref });
     assert.equal(posts(state).filter(c => c.method === 'PATCH').length, 1, 'no second commit');
 });
 
