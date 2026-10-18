@@ -10,6 +10,7 @@ import { classifyPath, filterPages, formatDate, listTimeText, sortPages, TYPE_LA
 import { escapeHtml, icon } from '../dom.js';
 import { navigate } from '../router.js';
 import { themeToggleHtml, bindThemeToggles } from '../theme.js';
+import { aboutSheetHtml, bindAbout } from './about.js';
 
 const FILTERS = [
     { type: 'all', label: 'All' },
@@ -89,6 +90,7 @@ export async function siteScreen(container, [id]) {
             <span class="dot" aria-hidden="true"></span><span>${name}</span>${icon('chevronDown', 16)}
         </button>
         <div class="header-actions">
+            <button type="button" class="icon-btn" id="open-about" aria-haspopup="dialog" aria-label="About Gorilla To Go">${icon('help')}</button>
             <button type="button" class="icon-btn" id="open-site-sheet" aria-haspopup="dialog" aria-label="Site settings">${icon('settings')}</button>
             ${themeToggleHtml()}
         </div>
@@ -115,6 +117,8 @@ export async function siteScreen(container, [id]) {
         <div id="list-message"></div>
         <a class="fab" href="#/site/${encodeURIComponent(site.id)}/new" aria-label="New page">${icon('plus', 28, 2.2)}</a>
     </div>
+
+    ${aboutSheetHtml()}
 
     <dialog class="sheet" id="switcher" aria-labelledby="switcher-title">
         <div class="sheet-body">
@@ -155,6 +159,7 @@ export async function siteScreen(container, [id]) {
 
     const $ = selector => container.querySelector(selector);
     bindThemeToggles(container);
+    bindAbout(container, container.querySelector('#open-about'));
     const controller = new AbortController();
     let pages = null;
 
