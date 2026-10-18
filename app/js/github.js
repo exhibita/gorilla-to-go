@@ -46,10 +46,10 @@ class CancelledError extends Error {}
 // One GitHub API request. Returns the Response.
 // Throws NetworkError when there is no connection or no answer in time, and CancelledError when the
 // caller's signal stops the request.
-async function request(fetch, token, path, { method = 'GET', body, signal, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
+async function request(fetch, token, path, { method = 'GET', body, signal, timeoutMs = REQUEST_TIMEOUT_MS, accept = 'application/vnd.github+json' } = {}) {
     if (signal?.aborted) throw new CancelledError();
     const headers = {
-        Accept: 'application/vnd.github+json',
+        Accept: accept,
         Authorization: authorizationHeader(token)
     };
     if (body) headers['Content-Type'] = 'application/json';
@@ -225,12 +225,21 @@ export async function getBlobText({ owner, repo, sha, token, fetch = globalThis.
 
 export { CancelledError };
 
-// Encode text as UTF-8 base64 (the contents API needs base64).
-function encodeBase64(text) {
-    const bytes = new TextEncoder().encode(text);
+// Encode bytes as base64.
+export function bytesToBase64(bytes) {
     let binary = '';
     for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
     return btoa(binary);
+}
+
+// Decode base64 to bytes.
+export function base64ToBytes(base64) {
+    return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+}
+
+// Encode text as UTF-8 base64 (the contents API needs base64).
+function encodeBase64(text) {
+    return bytesToBase64(new TextEncoder().encode(text));
 }
 
 // Save a changed file as one commit on the branch. sha is the SHA of the file that the user opened:
@@ -348,4 +357,135 @@ export async function deleteFile({ owner, repo, branch, path, sha, message, toke
     }
     if (response.status === 403 || response.status === 404) throw new GitHubError('No write access');
     throw new GitHubError(`GitHub error ${response.status}`);
+}
+
+const encodePath = path => String(path).split('/').map(encodeURIComponent).join('/');
+
+// The SHA that git gives a file: SHA-1 of "blob <size>\0" and the bytes.
+export async function gitBlobSha(bytes) {
+    const header = new TextEncoder().encode(`blob ${bytes.length}\0`);
+    const all = new Uint8Array(header.length + bytes.length);
+    all.set(header);
+    all.set(bytes, header.length);
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-1', all));
+    return Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+const MAX_COMMIT_TRIES = 3;
+// A photo is about 1 MB: give a slow phone connection more time than for other requests.
+const BLOB_TIMEOUT_MS = 60000;
+
+// Save a page and its images in one commit on the branch, so the site deploys once (mvp-plan
+// section 7). page: { path, text, baseSha } (baseSha null for a new page). images: [{ path, base64 }].
+// The Git Data API has no SHA check as the contents API has, so the app does it: the page on the
+// branch must still be the page the user opened, and an image must not replace another file. The
+// branch is moved only forward (force: false). When the branch moved meanwhile, the app checks again.
+// onProgress({ done, total }) tells the image uploads. Returns { sha } of the page file.
+export async function commitFiles({ owner, repo, branch, page, images = [], message, token, fetch = globalThis.fetch, onProgress = () => {}, signal, timeoutMs }) {
+    const base = repoPath(owner, repo);
+    const net = { signal, timeoutMs };
+    const readRef = async () => (await getJson(fetch, token, `${base}/git/ref/heads/${encodePath(branch)}`, net, `Branch ${branch} not found`)).object.sha;
+    const pageSha = await gitBlobSha(new TextEncoder().encode(page.text));
+    const files = await Promise.all(images.map(async image => ({ ...image, sha: await gitBlobSha(base64ToBytes(image.base64)) })));
+    const uploaded = new Map(); // Local SHA → SHA from GitHub, for the images sent in this publish.
+
+    // A POST or PATCH. Returns the JSON answer, or null when GitHub refuses a ref update (422).
+    const send = async (method, path, body, options = {}) => {
+        let response;
+        try {
+            response = await request(fetch, token, path, { method, body, ...net, ...options });
+        } catch (err) {
+            if (err instanceof CancelledError) throw err;
+            throw new GitHubError('No connection to GitHub', { offline: true });
+        }
+        if (response.status === 401) throw new GitHubError('Token not accepted');
+        if (response.status === 422 && method === 'PATCH') return null;
+        if (response.status === 403 || response.status === 404) throw new GitHubError('No write access');
+        if (!response.ok) throw new GitHubError(`GitHub error ${response.status}`);
+        return response.json();
+    };
+
+    // The file or folder at a commit: the contents API answer, or null when there is nothing.
+    const contentsAt = async (path, commitSha) => {
+        try {
+            return await getJson(fetch, token, `${base}/contents/${encodePath(path)}?ref=${encodeURIComponent(commitSha)}`, net, 'not found');
+        } catch (err) {
+            if (err instanceof GitHubError && err.message === 'not found') return null;
+            throw err;
+        }
+    };
+
+    for (let attempt = 1; attempt <= MAX_COMMIT_TRIES; attempt++) {
+        const commitSha = await readRef();
+        const commit = await getJson(fetch, token, `${base}/git/commits/${encodeURIComponent(commitSha)}`, net, 'Repository not found');
+
+        // The files on the branch now.
+        const pageNow = (await contentsAt(page.path, commitSha))?.sha ?? null;
+        const onGitHub = new Map();
+        for (const folder of new Set(files.map(file => file.path.slice(0, file.path.lastIndexOf('/'))))) {
+            const entries = await contentsAt(folder, commitSha);
+            if (Array.isArray(entries)) for (const entry of entries) onGitHub.set(entry.path, entry.sha);
+        }
+        const toSend = files.filter(file => onGitHub.get(file.path) !== file.sha);
+
+        // An earlier publish (for example one that timed out) put everything there already.
+        if (pageNow === pageSha && toSend.length === 0) return { sha: pageSha };
+        if (pageNow !== (page.baseSha ?? null) && pageNow !== pageSha) {
+            throw Object.assign(new GitHubError('This page changed on GitHub after you opened it.'), { conflict: true });
+        }
+        const taken = toSend.find(file => onGitHub.has(file.path));
+        if (taken) {
+            const name = taken.path.split('/').pop();
+            throw Object.assign(new GitHubError(`An image with the name ${name} exists on GitHub.`), { imageExists: taken.path });
+        }
+
+        const blobs = toSend.filter(file => !uploaded.has(file.sha));
+        if (blobs.length) onProgress({ done: 0, total: blobs.length });
+        for (const [i, file] of blobs.entries()) {
+            const blob = await send('POST', `${base}/git/blobs`, { content: file.base64, encoding: 'base64' }, { timeoutMs: timeoutMs ?? BLOB_TIMEOUT_MS });
+            uploaded.set(file.sha, blob.sha);
+            onProgress({ done: i + 1, total: blobs.length });
+        }
+
+        const tree = await send('POST', `${base}/git/trees`, {
+            base_tree: commit.tree.sha,
+            tree: [
+                { path: page.path, mode: '100644', type: 'blob', content: page.text },
+                ...toSend.map(file => ({ path: file.path, mode: '100644', type: 'blob', sha: uploaded.get(file.sha) }))
+            ]
+        });
+        const newCommit = await send('POST', `${base}/git/commits`, { message, tree: tree.sha, parents: [commitSha] });
+
+        let updated;
+        try {
+            updated = await send('PATCH', `${base}/git/refs/heads/${encodePath(branch)}`, { sha: newCommit.sha, force: false });
+        } catch (err) {
+            if (!err.offline) throw err;
+            // No answer: the update can still have reached GitHub. When the branch has the commit, it did.
+            if (await readRef() === newCommit.sha) return { sha: pageSha };
+            continue;
+        }
+        if (updated) return { sha: pageSha };
+        // 422: the branch moved after the app read it. Read it again and check again.
+    }
+    throw new GitHubError('The site changed during the publish. Try again.');
+}
+
+const IMAGE_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml' };
+
+// An image of the site as a data: URL, for the Preview (the CSP allows data: images, not GitHub
+// addresses). Returns null when the image cannot be read.
+export async function getImageDataUrl({ owner, repo, branch, path, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    const type = IMAGE_TYPES[String(path).split('.').pop().toLowerCase()];
+    if (!type) return null;
+    try {
+        const response = await request(fetch, token, `${repoPath(owner, repo)}/contents/${encodePath(path)}?ref=${encodeURIComponent(branch)}`, {
+            signal, timeoutMs, accept: 'application/vnd.github.raw+json'
+        });
+        if (!response.ok) return null;
+        return `data:${type};base64,${bytesToBase64(new Uint8Array(await response.arrayBuffer()))}`;
+    } catch (err) {
+        if (err instanceof CancelledError) throw err;
+        return null;
+    }
 }
