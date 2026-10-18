@@ -45,16 +45,28 @@ export async function editorScreen(container, [siteId, path]) {
     const controller = new AbortController();
 
     // ----- Load the page -----
+    const cannotOpen = message => {
+        container.innerHTML = `<div class="screen"><div class="screen-body"><h1 class="page-title" tabindex="-1">Cannot open the editor</h1>
+            <div class="banner">${escapeHtml(message)}</div>
+            <a class="btn btn-secondary" href="#/site/${encodeURIComponent(site.id)}">Go to the pages</a></div></div>`;
+    };
     const list = await deviceStore.getPageList(site.id);
     const entry = list?.pages.find(page => page.path === path);
     if (!entry) {
-        container.innerHTML = `<div class="screen"><div class="screen-body"><h1 class="page-title" tabindex="-1">Cannot open the editor</h1>
-            <div class="banner">This page is not in the saved list. Go back to the pages and tap Refresh.</div>
-            <a class="btn btn-secondary" href="#/site/${encodeURIComponent(site.id)}">Go to the pages</a></div></div>`;
+        cannotOpen('This page is not in the saved list. Go back to the pages and tap Refresh.');
         return;
     }
     const token = await getToken(site.id);
-    let originalText = await getPageText({ site, token, sha: entry.sha, signal: controller.signal });
+    let originalText;
+    try {
+        originalText = await getPageText({ site, token, sha: entry.sha, signal: controller.signal });
+    } catch (err) {
+        // For example no connection, and the page text is not saved on this device yet.
+        cannotOpen(err.offline
+            ? 'No connection. The text of this page is not saved on this device yet. Open the page again when you are online.'
+            : `The app cannot read this page: ${err.message}`);
+        return;
+    }
     let baseSha = entry.sha;
 
     // The state of the editor: the file parts, the front matter fields, and the text in the textarea.

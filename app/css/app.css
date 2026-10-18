@@ -710,3 +710,5 @@ button, input, textarea { font: inherit; color: inherit; }
 
 .input-multiline { min-height: 88px; padding: 10px 14px; resize: vertical; line-height: 1.4; }
 .btn .icon, .btn svg { flex: none; }
+
+.error-details { margin: 0; padding: 10px 12px; border-radius: var(--radius); background: var(--bg-2); color: var(--muted); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
