@@ -131,3 +131,13 @@ export async function recordSavedPage({ site, path, sha, text, store = deviceSto
     }
     await store.pruneBlobs();
 }
+
+// After a delete: take the page out of the saved list, remove its saved text, and make the next
+// load read the tree again.
+export async function recordDeletedPage({ site, path, store = deviceStore }) {
+    const list = await store.getPageList(site.id);
+    if (list) {
+        await store.putPageList({ ...list, pages: list.pages.filter(page => page.path !== path), treeSha: null });
+    }
+    await store.pruneBlobs();
+}

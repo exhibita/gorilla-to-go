@@ -295,3 +295,42 @@ export async function pathExists({ owner, repo, branch, path, token, fetch = glo
         throw err;
     }
 }
+
+// Delete a file in one commit on the branch (mvp-plan section 5 "Delete"). sha is the SHA of the file
+// the user opened: when the file changed on GitHub since then, nothing is deleted (409).
+// A file that is already gone counts as deleted. After no answer or a refusal, the app reads the
+// file: when it is gone, the delete (or an earlier one) reached GitHub.
+export async function deleteFile({ owner, repo, branch, path, sha, message, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    const filePath = String(path).split('/').map(encodeURIComponent).join('/');
+    const contentsPath = `${repoPath(owner, repo)}/contents/${filePath}`;
+
+    // { gone: true }, { sha } of the file now, or null when the app cannot tell.
+    const fileNow = async () => {
+        try {
+            const file = await getJson(fetch, token, `${contentsPath}?ref=${encodeURIComponent(branch)}`, { signal, timeoutMs }, 'gone');
+            return { sha: file.sha };
+        } catch (err) {
+            if (err instanceof CancelledError) throw err;
+            return err instanceof GitHubError && err.message === 'gone' ? { gone: true } : null;
+        }
+    };
+
+    let response;
+    try {
+        response = await request(fetch, token, contentsPath, { method: 'DELETE', body: { message, sha, branch }, signal, timeoutMs });
+    } catch (err) {
+        if (err instanceof CancelledError) throw err;
+        if ((await fileNow())?.gone) return;
+        throw new GitHubError('No connection to GitHub', { offline: true });
+    }
+    if (response.ok) return;
+    if (response.status === 401) throw new GitHubError('Token not accepted');
+
+    const now = await fileNow();
+    if (now?.gone) return;
+    if ((response.status === 409 || response.status === 422) && now && now.sha !== sha) {
+        throw Object.assign(new GitHubError('This page changed on GitHub after you opened it.'), { conflict: true });
+    }
+    if (response.status === 403 || response.status === 404) throw new GitHubError('No write access');
+    throw new GitHubError(`GitHub error ${response.status}`);
+}
