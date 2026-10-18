@@ -1,9 +1,9 @@
-// IndexedDB storage. Stores: "sites" (key "id"), "tokens" (key "siteId"), and the page cache:
-// "pageLists" (key "siteId") and "blobs" (key "sha"). Only sites.js, auth.js and pages.js use this
-// module. Nothing here runs until a function is called.
+// IndexedDB storage. Stores: "sites" (key "id"), "tokens" (key "siteId"), the page cache
+// "pageLists" (key "siteId") and "blobs" (key "sha"), and unsaved editor changes "edits" (key "key").
+// Only sites.js, auth.js, pages.js and edits.js use this module. Nothing here runs until a function is called.
 const DB_NAME = 'gtg';
-// Version 2 adds the page cache stores. The upgrade keeps the sites and tokens of version 1.
-const DB_VERSION = 2;
+// Version 2 adds the page cache stores. Version 3 adds "edits". Upgrades keep all earlier data.
+const DB_VERSION = 3;
 
 let dbPromise;
 
@@ -16,6 +16,7 @@ function openDb() {
             if (!db.objectStoreNames.contains('tokens')) db.createObjectStore('tokens', { keyPath: 'siteId' });
             if (!db.objectStoreNames.contains('pageLists')) db.createObjectStore('pageLists', { keyPath: 'siteId' });
             if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs', { keyPath: 'sha' });
+            if (!db.objectStoreNames.contains('edits')) db.createObjectStore('edits', { keyPath: 'key' });
         };
         request.onsuccess = () => {
             const db = request.result;
