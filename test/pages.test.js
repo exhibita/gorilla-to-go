@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadPages, getPageText, memoryStore, recordSavedPage } from '../app/js/pages.js';
+import { loadPages, getPageText, memoryStore, recordSavedPage, recordDeletedPage } from '../app/js/pages.js';
 
 const API = 'https://api.github.com';
 const REPO = '/repos/exhibita/gtg-test-site';
@@ -180,4 +180,16 @@ test('recordSavedPage updates the saved list and text, and the next load reads t
     const result = await loadPages({ site, token: TOKEN, fetch: github.fetch, store });
     assert.ok(github.calls.some(c => c.includes('/git/trees/')));
     assert.deepEqual(result.pages.map(p => p.title), ['B', 'A edited']);
+});
+
+test('recordDeletedPage takes the page out of the saved list and removes its saved text', async () => {
+    const github = fakeGitHub({ 'src/blog/a/index.md': md('A', '2026-01-01'), 'src/blog/b/index.md': md('B', '2026-01-02') });
+    const store = memoryStore();
+    await loadPages({ site, token: TOKEN, fetch: github.fetch, store });
+    assert.equal(store.blobCount(), 2);
+    await recordDeletedPage({ site, path: 'src/blog/a/index.md', store });
+    const saved = await store.getPageList(site.id);
+    assert.deepEqual(saved.pages.map(p => p.path), ['src/blog/b/index.md']);
+    assert.equal(saved.treeSha, null);
+    assert.equal(store.blobCount(), 1);
 });

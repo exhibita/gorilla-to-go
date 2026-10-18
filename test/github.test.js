@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRepoInput, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText, saveFile, pathExists } from '../app/js/github.js';
+import { parseRepoInput, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText, saveFile, pathExists, deleteFile } from '../app/js/github.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -408,4 +408,82 @@ test('saveFile for a new page: a refusal because the file exists is a conflict',
         [`GET ${REPO}/contents/src/x/index.md?ref=main`]: fileRoute('SOMEONE ELSE', 'THEIRSHA')
     });
     await assert.rejects(saveFile({ ...saveArgs, sha: undefined, fetch }), err => err.conflict === true);
+});
+
+// ---------- deleteFile ----------
+
+const deleteArgs = { owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path: 'src/blog/old/index.md', sha: 'OPENEDSHA', message: 'Delete old', token: TOKEN };
+const FILE = `${REPO}/contents/src/blog/old/index.md`;
+
+test('deleteFile sends the SHA the user opened, the branch and the message', async () => {
+    const sent = [];
+    const fetch = async (url, init) => {
+        sent.push({ url, method: init.method, body: JSON.parse(init.body) });
+        return json(200, { commit: { sha: 'C' } });
+    };
+    await deleteFile({ ...deleteArgs, fetch });
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].method, 'DELETE');
+    assert.equal(sent[0].url, `${API}${FILE}`);
+    assert.deepEqual(sent[0].body, { message: 'Delete old', sha: 'OPENEDSHA', branch: 'main' });
+});
+
+test('deleteFile stops when the page changed on GitHub, so nothing is deleted', async () => {
+    const { fetch } = fakeFetch({
+        [`DELETE ${FILE}`]: () => json(409, {}),
+        [`GET ${FILE}?ref=main`]: fileRoute('NEWER TEXT', 'NEWERSHA')
+    });
+    await assert.rejects(deleteFile({ ...deleteArgs, fetch }), err => err.conflict === true && err.message === 'This page changed on GitHub after you opened it.');
+});
+
+test('deleteFile: a page that is already gone counts as deleted', async () => {
+    for (const status of [404, 409]) {
+        const { fetch } = fakeFetch({
+            [`DELETE ${FILE}`]: () => json(status, {}),
+            [`GET ${FILE}?ref=main`]: () => json(404, {}),
+            [`GET ${REPO}/branches/main`]: () => json(200, {})
+        });
+        await deleteFile({ ...deleteArgs, fetch });
+    }
+});
+
+test('deleteFile: "not found" with a branch that cannot be read is an error, not a delete', async () => {
+    // The token lost access, or the branch was renamed: GitHub then says "not found" for the file too.
+    const { fetch } = fakeFetch({
+        [`DELETE ${FILE}`]: () => json(404, {}),
+        [`GET ${FILE}?ref=main`]: () => json(404, {}),
+        [`GET ${REPO}/branches/main`]: () => json(404, {})
+    });
+    await assert.rejects(deleteFile({ ...deleteArgs, fetch }), err => !err.conflict && /Branch main not found|No write access/.test(err.message));
+});
+
+test('deleteFile: a refusal when the check cannot reach GitHub says "No connection"', async () => {
+    const fetch = async (url, init = {}) => {
+        if (init.method === 'DELETE') return json(404, {});
+        throw new TypeError('Failed to fetch');
+    };
+    await assert.rejects(deleteFile({ ...deleteArgs, fetch }), err => err.offline === true);
+});
+
+test('deleteFile: a delete that timed out but reached GitHub is a success', async () => {
+    const routes = { [`GET ${FILE}?ref=main`]: () => json(404, {}), [`GET ${REPO}/branches/main`]: () => json(200, {}) };
+    const fetch = async (url, init = {}) => {
+        if (init.method === 'DELETE') throw new TypeError('Failed to fetch');
+        return routes[`GET ${url.replace(API, '')}`]();
+    };
+    await deleteFile({ ...deleteArgs, fetch });
+});
+
+test('deleteFile reports no connection when the file is still there, and a refused token', async () => {
+    const offline = async () => { throw new TypeError('Failed to fetch'); };
+    await assert.rejects(deleteFile({ ...deleteArgs, fetch: offline }), err => err.offline === true);
+    await assert.rejects(deleteFile({ ...deleteArgs, fetch: async () => json(401, {}) }), { message: 'Token not accepted' });
+});
+
+test('deleteFile: no write access when GitHub refuses and the file is unchanged', async () => {
+    const { fetch } = fakeFetch({
+        [`DELETE ${FILE}`]: () => json(403, {}),
+        [`GET ${FILE}?ref=main`]: fileRoute('SAME TEXT', 'OPENEDSHA')
+    });
+    await assert.rejects(deleteFile({ ...deleteArgs, fetch }), { message: 'No write access' });
 });
