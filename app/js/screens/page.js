@@ -1,6 +1,6 @@
-// Page view: one page for reading (build step 3). It shows the front matter and the Markdown text.
-// Editing comes in build step 4.
+// Page view: one page for reading. It shows the front matter and the Markdown text, and opens the editor.
 import { getToken } from '../auth.js';
+import { getLocalEdit } from '../edits.js';
 import { getSite } from '../sites.js';
 import { getPageText, deviceStore } from '../pages.js';
 import { parseFrontmatter } from '../frontmatter.js';
@@ -56,6 +56,8 @@ export async function pageScreen(container, [siteId, path]) {
         if (controller.signal.aborted) return;
 
         const frontmatter = parseFrontmatter(text);
+        const localEdit = await getLocalEdit(site.id, path).catch(() => null);
+        const hasLocalEdit = Boolean(localEdit && localEdit.text !== text);
         const page = pageSummary(path, entry.sha, frontmatter);
         const { data } = frontmatter;
         const fields = Object.entries(data).filter(([key]) => key !== 'title' && key !== 'description' && key !== 'images');
@@ -86,7 +88,8 @@ export async function pageScreen(container, [siteId, path]) {
             ${frontmatter.body.trim() ? `<pre class="page-text">${escapeHtml(frontmatter.body.trim())}</pre>` : '<p class="muted">This page has no text.</p>'}
         </section>
         <a class="text-link text-link--small" href="${githubFileUrl(site, path)}" target="_blank" rel="noopener noreferrer">Open the file on GitHub ${icon('external', 14)}</a>
-        <p class="muted small">Editing comes in the next version of the app.</p>`;
+        ${hasLocalEdit ? '<p class="banner">This page has changes on this device that are not published. Tap Edit to see them.</p>' : ''}
+        <a class="btn btn-primary" href="#/site/${encodeURIComponent(site.id)}/edit/${encodeURIComponent(path)}">${icon('edit')} Edit</a>`;
         body.querySelector('h1').focus({ preventScroll: true });
     } catch (err) {
         if (controller.signal.aborted) return;

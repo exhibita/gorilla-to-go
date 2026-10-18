@@ -116,3 +116,18 @@ export async function loadPages({ site, token, fetch = globalThis.fetch, store =
         throw err;
     }
 }
+
+// After a save: keep the new text, update the page in the saved list, and make the next load read
+// the tree again (the tree SHA is now old).
+export async function recordSavedPage({ site, path, sha, text, store = deviceStore }) {
+    await store.putBlob(sha, text);
+    const list = await store.getPageList(site.id);
+    if (list) {
+        const summary = pageSummary(path, sha, parseFrontmatter(text));
+        const pages = list.pages.some(page => page.path === path)
+            ? list.pages.map(page => (page.path === path ? summary : page))
+            : [...list.pages, summary];
+        await store.putPageList({ ...list, pages, treeSha: null });
+    }
+    await store.pruneBlobs();
+}

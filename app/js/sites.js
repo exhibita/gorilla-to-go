@@ -3,6 +3,7 @@ import * as db from './db.js';
 import { saveToken, deleteToken } from './auth.js';
 import { findDuplicate } from './sites-logic.js';
 import { deviceStore } from './pages.js';
+import { deleteSiteEdits } from './edits.js';
 
 const LAST_SITE_KEY = 'gtg.lastSite';
 
@@ -49,6 +50,7 @@ export async function removeSite(id) {
     try {
         await deviceStore.deletePageList(id);
         await deviceStore.pruneBlobs();
+        await deleteSiteEdits(id);
     } catch {
         // The next page list load prunes again.
     }

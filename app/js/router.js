@@ -48,7 +48,8 @@ async function render() {
             try {
                 result = (await handler(target, match.slice(1).map(decodeURIComponent))) || null;
             } catch (err) {
-                if (target.isConnected) showError(target, err?.userMessage);
+                console.error(err);
+                if (target.isConnected) showError(target, err?.userMessage, err, hash);
             }
             if (!target.isConnected) {
                 result?.(); // A newer screen is open: stop the work of this one.
@@ -64,13 +65,19 @@ async function render() {
 }
 
 // Shown when a screen cannot open, for example when the browser blocks storage.
-function showError(target, userMessage) {
+// The details (error name, message, the screen and the first lines of the stack) help to find the
+// cause. They contain no token: the app never puts the token in a message or a URL.
+function showError(target, userMessage, err, hash) {
+    const where = String(hash ?? '').replace(/\/(page|edit)\/.*/, '/$1/…');
+    const stack = String(err?.stack ?? '').split('\n').slice(0, 4).join('\n');
+    const details = err ? `${err.name ?? 'Error'}: ${err.message ?? err}\nScreen: ${where}\n${stack}` : '';
     target.innerHTML = `
 <div class="screen">
     <div class="screen-body">
         <h1 class="page-title" tabindex="-1">The screen did not open</h1>
         <p>${userMessage ? escapeHtml(userMessage) : 'The app cannot open this screen.'}</p>
         ${userMessage ? '' : '<p class="muted">In a private window, the browser can stop the app from storing data. Use a normal window.</p>'}
+        ${details ? `<pre class="error-details">${escapeHtml(details)}</pre>` : ''}
         <button type="button" class="btn btn-primary" data-reload>Try again</button>
         <a class="text-link" href="#/">Go to the start screen</a>
     </div>

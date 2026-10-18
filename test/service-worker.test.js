@@ -28,3 +28,8 @@ test('the cache name changes with the app version, so an update replaces the old
 test('the service worker does not cache GitHub API responses', () => {
     assert.match(sw, /url\.origin !== self\.location\.origin/);
 });
+
+test('the service worker uses the cache only when the network fails, never after a time limit', () => {
+    // A time limit mixed new files with cached files of an older version: the app did not start.
+    assert.doesNotMatch(sw, /setTimeout/);
+});

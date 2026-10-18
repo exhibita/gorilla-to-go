@@ -137,7 +137,12 @@ function parseScalar(value, lineNumber) {
             const char = value[i];
             if (char === '\\') {
                 const escaped = value[++i];
-                result += { n: '\n', t: '\t', '"': '"', '\\': '\\', '/': '/' }[escaped] ?? escaped;
+                if (escaped === 'u' && /^[0-9a-fA-F]{4}$/.test(value.slice(i + 1, i + 5))) {
+                    result += String.fromCharCode(parseInt(value.slice(i + 1, i + 5), 16));
+                    i += 4;
+                    continue;
+                }
+                result += { n: '\n', t: '\t', r: '\r', '"': '"', '\\': '\\', '/': '/', '0': '\0' }[escaped] ?? escaped;
             } else if (char === '"') {
                 ensureOnlyComment(value.slice(i + 1), lineNumber);
                 return result;
