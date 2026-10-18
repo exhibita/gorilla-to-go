@@ -17,10 +17,25 @@ function openDb() {
             if (!db.objectStoreNames.contains('pageLists')) db.createObjectStore('pageLists', { keyPath: 'siteId' });
             if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs', { keyPath: 'sha' });
         };
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => {
+            const db = request.result;
+            // A newer version of the app in another tab needs to upgrade: close this connection.
+            db.onversionchange = () => {
+                db.close();
+                dbPromise = undefined;
+            };
+            resolve(db);
+        };
         request.onerror = () => {
             dbPromise = undefined;
             reject(request.error);
+        };
+        // An older version of the app in another tab keeps the database open, so the upgrade cannot start.
+        request.onblocked = () => {
+            dbPromise = undefined;
+            reject(Object.assign(new Error('blocked'), {
+                userMessage: 'Gorilla To Go is open in another tab or window. Close it, then tap Try again.'
+            }));
         };
     });
     return dbPromise;

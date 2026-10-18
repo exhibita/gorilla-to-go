@@ -60,3 +60,11 @@ export function formatDate(date) {
     if (!date) return '';
     return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
+
+// When a list was loaded: "10:42 AM" today, else "Oct 15, 10:42 AM" (local time of the device).
+export function listTimeText(timestamp, now = Date.now()) {
+    const when = new Date(timestamp);
+    const time = when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    if (when.toDateString() === new Date(now).toDateString()) return time;
+    return `${when.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${time}`;
+}

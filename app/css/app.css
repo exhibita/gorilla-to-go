@@ -560,6 +560,8 @@ button, input { font: inherit; color: inherit; }
 
 .draft-label { padding: 1px 10px; border: 1px dashed var(--muted); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 600; }
 
+.error-label { padding: 2px 10px; border-radius: 999px; background: var(--fail-bg); color: var(--fail-text); font-size: 12px; font-weight: 600; }
+
 .empty { padding: 24px 0; color: var(--muted); text-align: center; }
 
 .banner {

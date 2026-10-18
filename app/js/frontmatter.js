@@ -48,6 +48,7 @@ function parseYaml(text) {
         const match = line.match(KEY_LINE);
         if (!match) throw new Error(`Line ${i + 1}: this is not a "key: value" line.`);
         const key = match[1];
+        if (Object.hasOwn(data, key)) throw new Error(`Line ${i + 1}: the key "${key}" is in the front matter two times.`);
         const rest = (match[2] ?? '').trim();
         i++;
 
@@ -114,6 +115,7 @@ function parseList(lines, start) {
                 if (!isBlankOrComment(lines[i])) {
                     const more = lines[i].trim().match(KEY_LINE);
                     if (!more) throw new Error(`Line ${i + 1}: this is not a "key: value" line.`);
+                    if (Object.hasOwn(map, more[1])) throw new Error(`Line ${i + 1}: the key "${more[1]}" is in this item two times.`);
                     map[more[1]] = more[2] ? parseScalar(more[2].trim(), i + 1) : null;
                 }
                 i++;
@@ -165,6 +167,12 @@ function parseScalar(value, lineNumber) {
     if (/^[[{]/.test(value)) throw new Error(`Line ${lineNumber}: the app cannot read [ ] or { } values.`);
 
     const plain = value.replace(/[ \t]+#.*$/, '').trim();
+    // The site build (gray-matter) refuses these plain values, or the app cannot read them (anchors),
+    // so the app must not show the page as normal.
+    if (/^[*&!@`%|>]|^[-?](\s|$)/.test(plain)) {
+        throw new Error(`Line ${lineNumber}: the value starts with a character that YAML keeps for other uses. Put the value in quotes.`);
+    }
+    if (/:(\s|$)/.test(plain)) throw new Error(`Line ${lineNumber}: the value has ": " in it. Put the value in quotes.`);
     if (/^(true|True|TRUE)$/.test(plain)) return true;
     if (/^(false|False|FALSE)$/.test(plain)) return false;
     if (/^(null|Null|NULL|~)$/.test(plain)) return null;

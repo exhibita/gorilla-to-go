@@ -4,7 +4,7 @@ import { getTemplateVersion, REQUIRED_TEMPLATE_VERSION } from '../github.js';
 import { getToken } from '../auth.js';
 import { getSite, listSites, removeSite, setLastSiteId, updateSite } from '../sites.js';
 import { loadPages, deviceStore } from '../pages.js';
-import { filterPages, formatDate, sortPages, TYPE_LABELS } from '../pages-logic.js';
+import { filterPages, formatDate, listTimeText, sortPages, TYPE_LABELS } from '../pages-logic.js';
 import { escapeHtml, icon } from '../dom.js';
 import { navigate } from '../router.js';
 import { themeToggleHtml, bindThemeToggles } from '../theme.js';
@@ -22,12 +22,13 @@ const view = { siteId: null, type: 'all', query: '' };
 // The last list of each site in this session, so "Back" from a page shows it at once.
 const lastLists = new Map();
 
-const timeText = timestamp => new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 // Type label, Draft label, date and image count of a page.
 export function pageMetaHtml(page) {
     const parts = [`<span class="type-label type-label--${page.type}">${TYPE_LABELS[page.type]}</span>`];
     if (page.draft) parts.push('<span class="draft-label">Draft</span>');
+    // The site build skips a page with front matter that is not valid, so the list must show it.
+    if (page.error) parts.push('<span class="error-label">Front matter error</span>');
     if (page.date) parts.push(`<span>${escapeHtml(formatDate(page.date))}</span>`);
     if (page.type === 'gallery') parts.push(`<span>${page.imageCount} ${page.imageCount === 1 ? 'image' : 'images'}</span>`);
     return parts.join('');
@@ -167,6 +168,8 @@ export async function siteScreen(container, [id]) {
         $('#remove').showModal();
     });
     $('#confirm-remove').addEventListener('click', async () => {
+        // Stop a running load first, so it does not save the list of the removed site.
+        currentLoad?.abort();
         try {
             await removeSite(site.id);
         } catch {
@@ -211,7 +214,17 @@ export async function siteScreen(container, [id]) {
         });
     }
 
+    // Each load has its own stop signal. A newer load, or leaving the screen, stops the older one,
+    // so an old load can never change what the screen shows.
+    let currentLoad = null;
     const load = async () => {
+        currentLoad?.abort();
+        const thisLoad = new AbortController();
+        currentLoad = thisLoad;
+        const stop = () => thisLoad.abort();
+        controller.signal.addEventListener('abort', stop);
+        const isCurrent = () => currentLoad === thisLoad && !thisLoad.signal.aborted;
+
         $('#refresh').disabled = true;
         status(pages ? 'Looking for changes' : 'Loading pages');
         try {
@@ -220,19 +233,19 @@ export async function siteScreen(container, [id]) {
             const result = await loadPages({
                 site,
                 token,
-                signal: controller.signal,
+                signal: thisLoad.signal,
                 onProgress: ({ done, total }) => {
-                    if (total > 0) status(`Loading pages: ${done} of ${total}`);
+                    if (total > 0 && isCurrent()) status(`Loading pages: ${done} of ${total}`);
                 }
             });
-            if (controller.signal.aborted) return;
+            if (!isCurrent()) return;
             pages = result.pages;
             lastLists.set(site.id, result);
             renderList();
-            status(result.offline ? `No connection. This list is from ${timeText(result.fetchedAt)}.` : `Updated ${timeText(result.fetchedAt)}`);
-            if (result.truncated) message('<p class="empty">The repository is very large. Some pages are possibly not in the list.</p>');
+            status(result.offline ? `No connection. This list is from ${listTimeText(result.fetchedAt)}.` : `Updated ${listTimeText(result.fetchedAt)}`);
+            if (result.truncated) message('<p class="empty">The repository is very large. Some pages can be missing from the list.</p>');
         } catch (err) {
-            if (controller.signal.aborted) return;
+            if (!isCurrent()) return;
             status('');
             const help = err.message === 'Token not accepted' || err.noToken ? TOKEN_HELP : '';
             if (pages) {
@@ -241,7 +254,8 @@ export async function siteScreen(container, [id]) {
                 message(`<div class="banner">${escapeHtml(err.message)}${help}</div>`);
             }
         } finally {
-            if (!controller.signal.aborted) $('#refresh').disabled = false;
+            controller.signal.removeEventListener('abort', stop);
+            if (isCurrent()) $('#refresh').disabled = false;
         }
     };
 

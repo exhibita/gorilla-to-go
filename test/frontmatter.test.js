@@ -116,3 +116,37 @@ test('isDraft accepts true and the string "true" in any case (decision 22)', () 
     assert.equal(isDraft({}), false);
     assert.equal(isDraft(null), false);
 });
+
+// Checked against gray-matter, the parser of build.js: it refuses all of these except the anchor,
+// which this parser cannot read.
+test('YAML that the site build refuses, or that the app cannot read, is an error', () => {
+    const refused = [
+        'title: Recipe: Pasta',             // ": " in a plain value
+        'title: *alias',                    // an alias
+        'title: &anchor value',             // an anchor
+        'title: !tag value',                // a tag
+        'title: @handle',                   // a reserved character
+        'title: `code`',                    // a reserved character
+        'title: One\ntitle: Two'            // a duplicated key
+    ];
+    for (const yaml of refused) {
+        assert.ok(parseFrontmatter(page(yaml)).error, `accepted ${JSON.stringify(yaml)}`);
+    }
+});
+
+test('a colon without a space after it, and a URL, are plain text', () => {
+    const { data, error } = parseFrontmatter(page('time: 10:30\nlink: https://example.com/a#b\nratio: a:b'));
+    assert.equal(error, null);
+    assert.deepEqual(data, { time: '10:30', link: 'https://example.com/a#b', ratio: 'a:b' });
+});
+
+test('a | or > block inside an images: entry is an error, not wrong data', () => {
+    const result = parseFrontmatter(page('images:\n  - path: ./a.jpg\n    caption: |\n      Note: this is it'));
+    assert.ok(result.error);
+});
+
+test('a tab in an indent is read, as the site build does', () => {
+    const { data, error } = parseFrontmatter(page('images:\n\t- path: ./a.jpg'));
+    assert.equal(error, null);
+    assert.deepEqual(data.images, [{ path: './a.jpg' }]);
+});

@@ -2,7 +2,7 @@
 // - The list of each site is saved with the tree SHA. An unchanged tree needs no file requests.
 // - The text of each file is saved by its blob SHA, so a changed site reads only the changed files.
 // - Offline, the saved list is used.
-import { listMarkdownFiles, getBlobText } from './github.js';
+import { listMarkdownFiles, getBlobText, CancelledError } from './github.js';
 import { parseFrontmatter } from './frontmatter.js';
 import { pageSummary, sortPages } from './pages-logic.js';
 import * as db from './db.js';
@@ -19,8 +19,12 @@ export const deviceStore = {
     deletePageList: siteId => db.remove('pageLists', siteId),
     getBlob: async sha => (await db.get('blobs', sha))?.text,
     putBlob: (sha, text) => db.put('blobs', { sha, text }),
+    // Delete the lists of sites that are not in the app any more, then every text that no list uses.
     async pruneBlobs() {
-        const keep = new Set((await db.getAll('pageLists')).flatMap(list => list.pages.map(page => page.sha)));
+        const siteIds = new Set(await db.getAllKeys('sites'));
+        const lists = await db.getAll('pageLists');
+        for (const list of lists.filter(list => !siteIds.has(list.siteId))) await db.remove('pageLists', list.siteId);
+        const keep = new Set(lists.filter(list => siteIds.has(list.siteId)).flatMap(list => list.pages.map(page => page.sha)));
         for (const key of await db.getAllKeys('blobs')) {
             if (!keep.has(key)) await db.remove('blobs', key);
         }
@@ -55,12 +59,22 @@ export async function getPageText({ site, token, sha, fetch = globalThis.fetch, 
 }
 
 // Run task(item) for each item, with no more than `limit` tasks at the same time.
-async function inParallel(items, limit, task) {
+// After the first failure, or when the signal stops the work, no new task starts.
+async function inParallel(items, limit, task, signal) {
     let next = 0;
+    let failed = false;
     const worker = async () => {
-        while (next < items.length) await task(items[next++]);
+        while (!failed && !signal?.aborted && next < items.length) {
+            try {
+                await task(items[next++]);
+            } catch (err) {
+                failed = true;
+                throw err;
+            }
+        }
     };
     await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    if (signal?.aborted) throw new CancelledError();
 }
 
 // Load the pages of a site. Returns { pages, fetchedAt, offline, truncated }.
@@ -86,11 +100,13 @@ export async function loadPages({ site, token, fetch = globalThis.fetch, store =
             await inParallel(missing, MAX_PARALLEL_REQUESTS, async file => {
                 const text = await getPageText({ site, token, sha: file.sha, fetch, store, signal });
                 known.set(`${file.sha} ${file.path}`, pageSummary(file.path, file.sha, parseFrontmatter(text)));
-                onProgress({ done: ++done, total: missing.length });
-            });
+                if (!signal?.aborted) onProgress({ done: ++done, total: missing.length });
+            }, signal);
             pages = listing.files.map(file => known.get(`${file.sha} ${file.path}`));
         }
 
+        // A stopped load saves nothing (for example, the site was removed during the load).
+        if (signal?.aborted) throw new CancelledError();
         const entry = { siteId: site.id, treeSha: listing.treeSha, summaryVersion: SUMMARY_VERSION, pages, fetchedAt: Date.now(), truncated };
         await store.putPageList(entry);
         await store.pruneBlobs();

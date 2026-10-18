@@ -126,3 +126,36 @@ test('getPageText uses the saved text, and reads GitHub only when it is missing'
     assert.equal(await getPageText({ site, token: TOKEN, sha: pages[0].sha, fetch: github.fetch, store: fresh }), md('A', '2026-01-01'));
     assert.equal(github.blobCalls(), 1);
 });
+
+test('after one file request fails, no new file requests start', async () => {
+    const files = {};
+    for (let i = 0; i < 30; i++) files[`src/blog/post-${i}/index.md`] = md(`Post ${i}`, '2026-01-01');
+    const github = fakeGitHub(files);
+    const realFetch = github.fetch;
+    let blobRequests = 0;
+    const failingFetch = async url => {
+        if (url.includes('/git/blobs/') && ++blobRequests === 3) return new Response('{}', { status: 404 });
+        return realFetch(url);
+    };
+    await assert.rejects(loadPages({ site, token: TOKEN, fetch: failingFetch, store: memoryStore() }));
+    await new Promise(resolve => setTimeout(resolve, 100)); // Let running requests end.
+    assert.ok(blobRequests <= 8, `${blobRequests} file requests after the failure point`);
+});
+
+test('no progress is reported after the load is stopped', async () => {
+    const files = {};
+    for (let i = 0; i < 12; i++) files[`src/blog/post-${i}/index.md`] = md(`Post ${i}`, '2026-01-01');
+    const github = fakeGitHub(files);
+    const controller = new AbortController();
+    const progress = [];
+    const load = loadPages({
+        site, token: TOKEN, fetch: github.fetch, store: memoryStore(), signal: controller.signal,
+        onProgress: p => {
+            progress.push(p);
+            if (p.done === 2) controller.abort();
+        }
+    });
+    await load.catch(() => {});
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.ok(progress.every(p => p.done <= 2), `progress after the stop: ${JSON.stringify(progress.at(-1))}`);
+});

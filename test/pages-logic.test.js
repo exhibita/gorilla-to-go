@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPath, pageSummary, sortPages, filterPages, formatDate, TYPE_LABELS } from '../app/js/pages-logic.js';
+import { classifyPath, pageSummary, sortPages, filterPages, formatDate, listTimeText, TYPE_LABELS } from '../app/js/pages-logic.js';
 import { parseFrontmatter } from '../app/js/frontmatter.js';
 
 test('blog posts and galleries are known by their path', () => {
@@ -73,4 +73,13 @@ test('formatDate shows the date in UTC, so it is not one day early in the US', (
 
 test('type labels match design.md', () => {
     assert.deepEqual(TYPE_LABELS, { blog: 'Blog', page: 'Page', gallery: 'Gallery' });
+});
+
+test('listTimeText shows the time for today, and the date for an older list', () => {
+    const now = new Date(2026, 9, 18, 15, 0).getTime();
+    const today = new Date(2026, 9, 18, 10, 42).getTime();
+    const older = new Date(2026, 9, 15, 10, 42).getTime();
+    assert.match(listTimeText(today, now), /10:42/);
+    assert.doesNotMatch(listTimeText(today, now), /Oct/);
+    assert.match(listTimeText(older, now), /Oct 15/);
 });
