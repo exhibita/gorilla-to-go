@@ -52,6 +52,7 @@ The app checks the token automatically.
 - **"Token not accepted":** copy the token again, and make sure you copied all of it.
 - **"Repository not found":** make sure you selected the site's repository in step 12.
 - **"No write access":** make sure **Contents** is set to **Read and write** in step 14.
+- **"No Actions access":** make sure **Actions** is set to **Read-only** in step 15.
 - **The site belongs to an organization:** the organization owner may need to approve the token first.
 
 Note: GitHub sometimes changes the names and places of these settings. If a step does not match, look for **Fine-grained tokens** in **Developer settings**.

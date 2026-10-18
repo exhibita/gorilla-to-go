@@ -453,7 +453,8 @@ button, input { font: inherit; color: inherit; }
 .sheet-item-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- Help pages ---------- */
-.prose { font-size: 16px; line-height: 1.55; }
+.prose { display: block; font-size: 16px; line-height: 1.55; }
+.prose > :first-child { margin-top: 0; }
 .prose h2 { margin: 24px 0 8px; font-size: 20px; font-weight: 600; }
 .prose ol, .prose ul { padding-left: 1.4em; }
 .prose li { margin: 4px 0; }
