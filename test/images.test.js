@@ -82,6 +82,11 @@ test('markdownPath encodes a folder with a space or parentheses, and repoImagePa
     const path = 'src/images/page/docs/My Page (old)/x.jpg';
     assert.equal(markdownPath(path), './images/page/docs/My%20Page%20%28old%29/x.jpg');
     assert.equal(repoImagePath(markdownPath(path)), path);
+    for (const folder of ['rock&roll', 'a,b+c;d=e@f$g', 'Café']) {
+        const repo = `src/images/gallery/${folder}/x.jpg`;
+        assert.equal(repoImagePath(markdownPath(repo)), repo, folder);
+    }
+    assert.equal(repoImagePath('./images/a%2F..%2Fb/x.jpg'), null, 'an encoded / is refused');
 });
 
 test('referencedImages and replaceImagePath ignore ../images/ and other paths that end with the path', () => {

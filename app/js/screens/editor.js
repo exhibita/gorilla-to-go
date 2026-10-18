@@ -109,7 +109,7 @@ export async function editorScreen(container, [siteId, path]) {
         const value = key => (parsed.data[key] == null || typeof parsed.data[key] === 'object' ? '' : String(parsed.data[key]));
         fields = { title: value('title'), date: value('date'), description: value('description') };
         gallery = galleryItems(parsed.data);
-        hasCover = parsed.data.cover != null && parsed.data.cover !== '';
+        hasCover = Boolean(parsed.data.cover); // As the build: cover: false is no cover.
     };
     load(startText);
 
@@ -203,7 +203,7 @@ export async function editorScreen(container, [siteId, path]) {
 
     ${isGallery ? `<dialog class="sheet" id="photo-sheet" aria-labelledby="photo-sheet-title">
         <form class="sheet-body" id="photo-form" novalidate>
-            <h2 class="sheet-title" id="photo-sheet-title"></h2>
+            <h2 class="sheet-title" id="photo-sheet-title" aria-live="polite"></h2>
             <img class="image-thumb" id="photo-thumb" alt="" hidden>
             <p class="muted small" id="photo-path"></p>
             <div class="field">
@@ -525,6 +525,8 @@ export async function editorScreen(container, [siteId, path]) {
         $('#photos-hint').textContent = gallery.length
             ? `${gallery.length} ${gallery.length === 1 ? 'photo' : 'photos'}. Tap a photo to change its text or its place.${hasCover ? '' : ' The first photo is the cover on the gallery page.'}`
             : 'This gallery has no photos. Tap Add photos.';
+        // The build uses the first item with a path as the cover, unless the page has cover:.
+        const coverIndex = hasCover ? -1 : gallery.findIndex(item => isPhoto(item) && typeof item.path === 'string' && item.path.trim() !== '');
         $('#photo-grid').replaceChildren(...gallery.map((item, index) => {
             const photoPath = isPhoto(item) ? galleryImagePath(item.path) : null;
             const name = isPhoto(item) && typeof item.path === 'string' ? item.path.split('/').pop() : '(no path)';
@@ -548,7 +550,7 @@ export async function editorScreen(container, [siteId, path]) {
                 frame.append(img);
             }
             const marks = [];
-            if (index === 0 && !hasCover) marks.push('Cover');
+            if (index === coverIndex) marks.push('Cover');
             if (pendingImages.some(image => image.path === photoPath)) marks.push('Not published');
             if (isPhoto(item) && !textOf(item.alt) && !textOf(item.caption)) marks.push('No alt text');
             const text = document.createElement('span');
@@ -586,9 +588,10 @@ export async function editorScreen(container, [siteId, path]) {
         thumb.removeAttribute('src');
         const photoPath = editable ? galleryImagePath(item.path) : null;
         if (photoPath) {
-            const shownIndex = photoIndex;
+            const shownItem = item;
             imageUrl(photoPath).then(url => {
-                if (!url || shownIndex !== photoIndex || !photoSheet.open) return;
+                // The sheet can show another photo now (after a move, a remove or a new open).
+                if (!url || gallery[photoIndex] !== shownItem || !photoSheet.open) return;
                 thumb.src = url;
                 thumb.hidden = false;
             });
@@ -604,7 +607,7 @@ export async function editorScreen(container, [siteId, path]) {
         const item = gallery[photoIndex];
         if (!isPhoto(item)) return;
         for (const key of ['alt', 'caption']) {
-            const typed = $(`#photo-${key}`).value.trim();
+            const typed = $(`#photo-${key}`).value.replace(/\s+/g, ' ').trim(); // One line, as on the site.
             if (typed === textOf(item[key]).trim()) continue;
             if (typed) item[key] = typed;
             else delete item[key];
@@ -628,18 +631,28 @@ export async function editorScreen(container, [siteId, path]) {
             photoIndex += step;
             fillPhotoSheet();
             photosChanged();
+            // At the first or last place this button is off: keep the focus in the sheet.
+            if ($(id).disabled) $(step < 0 ? '#photo-later' : '#photo-earlier').focus();
         });
     }
     $('#photo-remove')?.addEventListener('click', () => {
-        gallery = gallery.filter((_, index) => index !== photoIndex);
+        const removed = photoIndex;
+        gallery = gallery.filter((_, index) => index !== removed);
         photoSheet.close();
         photosChanged();
         status('The photo is removed from the gallery. The image file stays in the repository.');
+        // The card that opened the sheet is gone: put the focus on the photo now in its place.
+        const cards = container.querySelectorAll('.photo-card');
+        (cards[Math.min(removed, cards.length - 1)] ?? $('#add-photos')).focus();
     });
 
     // Add photos: several at once. Each one is made ready as in the editor (step 7).
     $('#add-photos')?.addEventListener('click', () => {
-        if (preparing || publishing) return;
+        if (publishing) {
+            status('Wait until Publish is complete, then add photos.');
+            return;
+        }
+        if (preparing) return;
         $('#photo-files').click();
     });
     $('#photo-files')?.addEventListener('change', async () => {
@@ -650,6 +663,7 @@ export async function editorScreen(container, [siteId, path]) {
         preparing = true;
         const problems = [];
         let added = 0;
+        let lastAdded = null;
         try {
             githubNames = await namesOnGitHub();
             for (const [i, file] of files.entries()) {
@@ -658,9 +672,11 @@ export async function editorScreen(container, [siteId, path]) {
                     const prepared = await prepareImage(file);
                     const repoPath = folder + freeName(file.name, prepared.extension);
                     pendingImages = [...pendingImages, { path: repoPath, base64: prepared.base64, mimeType: prepared.mimeType }];
-                    gallery = [...gallery, { path: markdownPath(repoPath) }];
+                    lastAdded = { path: markdownPath(repoPath) };
+                    gallery = [...gallery, lastAdded];
                     added++;
                     renderPhotos();
+                    keepSoon(); // Each photo is kept on the device, also when the user leaves now.
                 } catch (err) {
                     problems.push(`${file.name}: ${err instanceof ImageError ? err.message : 'The app cannot read this image.'}`);
                 }
@@ -668,12 +684,14 @@ export async function editorScreen(container, [siteId, path]) {
         } finally {
             preparing = false;
         }
-        if (!photos.isConnected) return; // The user left the editor.
         if (added) await keepNow();
+        if (!photos.isConnected) return; // The user left the editor. The photos are kept.
         const one = added === 1 && files.length === 1;
         const addedText = added === 0 ? '' : `Added ${added} ${added === 1 ? 'photo' : 'photos'}. ${one ? '' : 'Tap each photo to add alt text and a caption. '}`;
         status(`${addedText}${problems.join(' ')}`.trim());
-        if (one) openPhoto(gallery.length - 1); // Ask for the alt text at once.
+        // Ask for the alt text at once, unless the user opened a sheet meanwhile.
+        const index = gallery.indexOf(lastAdded);
+        if (one && index !== -1 && !photoSheet.open) openPhoto(index);
     });
 
     // ----- Write / Photos / Preview -----
@@ -697,10 +715,17 @@ export async function editorScreen(container, [siteId, path]) {
                             grid.append(note);
                             continue;
                         }
+                        const figure = document.createElement('figure');
                         const img = document.createElement('img');
                         img.alt = textOf(item.alt ?? item.caption);
                         img.dataset.imagePath = photoPath;
-                        grid.append(img);
+                        figure.append(img);
+                        if (textOf(item.caption)) {
+                            const caption = document.createElement('figcaption');
+                            caption.textContent = textOf(item.caption);
+                            figure.append(caption);
+                        }
+                        grid.append(figure);
                     }
                     preview.append(grid);
                 }

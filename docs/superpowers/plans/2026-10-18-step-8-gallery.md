@@ -9,7 +9,7 @@
 ## Global Constraints
 
 - **My call:** the Gallery screen is a third view in the editor for gallery pages: Write | Photos | Preview. The photo list is front matter of the same file, so the text and the photos share one set of unsaved changes on the device, one Restore, one conflict check and one Publish.
-- The app changes only the `images:` block of the front matter, and only when the list changed. Other keys, comments and line endings stay byte for byte. Unknown keys in an item stay.
+- The app changes only the `images:` block of the front matter, and only when the list changed. Other keys, comments outside the list and line endings stay byte for byte. Unknown keys in an item stay. Comments between the items, and a comment on the `images:` line, go away when the list changes.
 - Written format: `  - path: ./images/gallery/<slug>/<name>` with `alt:` and `caption:` lines (text in double quotes). An empty alt text or caption is left out, so the build can use the caption as the alt text.
 - New photos: the step 7 rules (re-encode, max 1600 px, no EXIF, names unique in the page, on the device and on GitHub), in `src/images/gallery/<slug>/`. Several photos can be added at once.
 - Remove = remove from the list. The image file stays in the repository (image cleanup is in `future.md`); the app says so. A new photo that is removed before Publish is not uploaded.

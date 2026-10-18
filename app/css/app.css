@@ -787,4 +787,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .photo-mark--warn { background: var(--fail-bg); color: var(--fail-text); }
 .sheet-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .preview-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 16px; }
+.segmented button:disabled { opacity: 0.45; cursor: not-allowed; }
+.preview-gallery figure { margin: 0; }
+.preview-gallery figcaption { margin-top: 4px; color: var(--muted); font-size: 13px; }
 .editor-preview .preview-gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; margin: 0; }

@@ -69,6 +69,18 @@ test('setImages quotes a path that plain YAML cannot hold', () => {
     assert.equal(parse(changed).data.images[0].path, './images/my photo #1.jpg');
 });
 
+test('setImages quotes a path that plain YAML would read as another type', () => {
+    for (const path of ['true', 'null', '1e3', '2024-01-01', '.inf']) {
+        const changed = setImages('', [{ path }]);
+        assert.equal(parse(changed).data.images[0].path, path, path);
+    }
+});
+
+test('setImages keeps a comment after the last item', () => {
+    const raw = 'images:\n  - path: ./images/a.jpg\n  # About the cover:\ncover: ./images/b.jpg';
+    assert.equal(setImages(raw, [{ path: './images/c.jpg' }]), 'images:\n  - path: ./images/c.jpg\n  # About the cover:\ncover: ./images/b.jpg');
+});
+
 test('galleryItems gives a copy of the list, and an empty list for no list', () => {
     const data = { images: [{ path: './a.jpg', alt: 'A' }] };
     const items = galleryItems(data);

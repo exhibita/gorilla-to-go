@@ -23,17 +23,19 @@ export function markdownPath(repoPath) {
 }
 
 // ./images/... in the page → src/images/..., or null for any other address.
+// Each part is decoded on its own (markdownPath encodes & , + and others too); a part that decodes
+// to a "/" is refused.
 export function repoImagePath(address) {
-    let path;
+    const value = String(address ?? '');
+    if (!value.startsWith('./images/')) return null;
+    let parts;
     try {
-        path = decodeURI(String(address ?? ''));
+        parts = value.slice(2).split('/').map(part => decodeURIComponent(part));
     } catch {
         return null;
     }
-    if (!path.startsWith('./images/')) return null;
-    const rest = path.slice(2);
-    if (rest.split('/').some(part => part === '' || part === '.' || part === '..')) return null;
-    return `src/${rest}`;
+    if (parts.some(part => part === '' || part === '.' || part === '..' || part.includes('/'))) return null;
+    return `src/${parts.join('/')}`;
 }
 
 // A file name from the name of the photo, with the extension of the new copy. -2, -3 when the name is

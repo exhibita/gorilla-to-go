@@ -92,7 +92,8 @@ export function setFields(raw, fields) {
 function itemValue(key, value) {
     if (value === null || value === undefined) return '';
     if (typeof value !== 'string') return String(value);
-    return key === 'path' && /^[\w./-]+$/.test(value) && !value.startsWith('-') ? value : yamlText(value);
+    // Only a value with a "/": a plain true, null, 1e3 or 2024-01-01 would not read back as text.
+    return key === 'path' && /^[\w./-]+$/.test(value) && value.includes('/') && !value.startsWith('-') ? value : yamlText(value);
 }
 
 // The lines of the images: block. An empty text value is left out (the build then uses the caption
@@ -125,11 +126,12 @@ export function setImages(raw, items) {
     const lines = raw === '' ? [] : raw.split('\n');
     const start = lines.findIndex(line => /^images[ \t]*:/.test(line));
     if (start === -1) return [...lines, ...imagesLines(items)].join('\n');
-    // The key line, then the lines of its list: indented lines, items at column 0, and blank lines
-    // that an item line follows.
+    // The key line, then the lines of its list: indented lines and items at column 0. Blank lines and
+    // comments after the last item stay (a comment there can be about the next key). Comments between
+    // the items go away when the list changes.
     let end = start + 1;
     for (let i = start + 1; i < lines.length; i++) {
-        if (lines[i].trim() === '') continue;
+        if (lines[i].trim() === '' || lines[i].trim().startsWith('#')) continue;
         if (indentOf(lines[i]) === 0 && !lines[i].startsWith('-')) break;
         end = i + 1;
     }
