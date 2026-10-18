@@ -62,7 +62,11 @@ export function createHistory(initial) {
     const states = [{ ...initial }];
     return {
         push(state) {
-            if (state.text === states.at(-1).text) return;
+            // The same text: no new step, but keep the new selection, so undo gives it back.
+            if (state.text === states.at(-1).text) {
+                states[states.length - 1] = { ...state };
+                return;
+            }
             states.push({ ...state });
             if (states.length > MAX_UNDO_STEPS + 1) states.shift();
         },

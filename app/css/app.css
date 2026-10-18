@@ -110,7 +110,7 @@ body {
 a { color: var(--link); }
 a:hover { color: var(--text); }
 
-button, input { font: inherit; color: inherit; }
+button, input, textarea { font: inherit; color: inherit; }
 
 :focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 
@@ -597,3 +597,116 @@ button, input { font: inherit; color: inherit; }
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
+
+/* ---------- Editor ---------- */
+/* The editor fills the visual viewport, so the toolbar stays above the phone keyboard. */
+.editor-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100vh;
+    height: 100dvh;
+    max-width: 560px;
+    min-height: 0;
+    margin: 0 auto;
+    background: var(--bg);
+}
+
+.editor-topbar { position: static; justify-content: space-between; }
+
+.segmented { display: flex; padding: 3px; border-radius: var(--radius); background: var(--bg-2); }
+
+.segmented button {
+    min-height: 38px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.segmented button[aria-pressed="true"] { background: var(--card); color: var(--text); font-weight: 600; box-shadow: 0 2px 8px rgba(43, 41, 39, 0.08); }
+
+.btn-publish {
+    min-height: 44px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: var(--radius);
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-publish:disabled { opacity: 0.5; cursor: wait; }
+
+.editor-head { padding: 14px 20px 10px; display: flex; flex-direction: column; gap: 6px; }
+.editor-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.editor-meta-row .btn-small { display: inline-flex; align-items: center; gap: 6px; }
+.editor-title { margin: 0; font-family: var(--font-title); font-size: 24px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.banner-actions { display: flex; gap: 8px; margin-top: 6px; }
+
+.editor-body { flex: 1; min-height: 0; padding: 0 20px; display: flex; }
+
+.editor-text,
+.editor-preview {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    color: var(--text);
+    overflow-y: auto;
+}
+
+.editor-text {
+    resize: none;
+    font-size: 17px; /* 16 px or more: iPhone does not zoom in on focus. */
+    line-height: 1.6;
+}
+
+.editor-text:focus { outline: 3px solid var(--primary); outline-offset: -1px; }
+
+.editor-preview img { max-width: 100%; }
+.preview-image { display: block; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.editor-preview table { border-collapse: collapse; }
+.editor-preview th, .editor-preview td { padding: 4px 8px; border: 1px solid var(--border); }
+.editor-preview blockquote { margin: 0; padding-left: 14px; border-left: 3px solid var(--border); color: var(--muted); }
+
+.editor-status { margin: 0; padding: 8px 20px; min-height: 36px; color: var(--muted); font-size: 13px; }
+
+.editor-toolbar {
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: var(--bg-2);
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.editor-toolbar button {
+    height: 44px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.editor-toolbar button:active { background: var(--border); }
+.tool-heading { font-family: var(--font-title); font-size: 19px; font-weight: 700; }
+.tool-bold { font-size: 18px; font-weight: 700; }
+.tool-italic { font-family: var(--font-title); font-size: 19px; font-style: italic; }
+
+.input-multiline { min-height: 88px; padding: 10px 14px; resize: vertical; line-height: 1.4; }
+.btn .icon, .btn svg { flex: none; }

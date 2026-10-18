@@ -73,3 +73,10 @@ test('push ignores a state with the same text as the last one', () => {
     history.push({ text: 'a', start: 0, end: 0 });
     assert.equal(history.canUndo(), false);
 });
+
+test('undo after bold gives back the selected word, so bold can be used again on it', () => {
+    const history = createHistory({ text: 'Hello world', start: 0, end: 0 });
+    history.push({ text: 'Hello world', start: 6, end: 11 }); // The user selects "world".
+    history.push({ text: 'Hello **world**', start: 8, end: 13 }); // Bold.
+    assert.deepEqual(history.undo(), { text: 'Hello world', start: 6, end: 11 });
+});
