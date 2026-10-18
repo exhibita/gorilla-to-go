@@ -50,24 +50,38 @@ export async function editorScreen(container, [siteId, path]) {
             <div class="banner">${escapeHtml(message)}</div>
             <a class="btn btn-secondary" href="#/site/${encodeURIComponent(site.id)}">Go to the pages</a></div></div>`;
     };
-    const list = await deviceStore.getPageList(site.id);
+    const list = await deviceStore.getPageList(site.id).catch(() => null);
     const entry = list?.pages.find(page => page.path === path);
-    if (!entry) {
-        cannotOpen('This page is not in the saved list. Go back to the pages and tap Refresh.');
-        return;
-    }
     const token = await getToken(site.id);
-    let originalText;
-    try {
-        originalText = await getPageText({ site, token, sha: entry.sha, signal: controller.signal });
-    } catch (err) {
-        // For example no connection, and the page text is not saved on this device yet.
-        cannotOpen(err.offline
-            ? 'No connection. The text of this page is not saved on this device yet. Open the page again when you are online.'
-            : `The app cannot read this page: ${err.message}`);
-        return;
+    // A page on GitHub: originalText is its text and baseSha its SHA. A new page (step 5) is only on
+    // this device: originalText is empty and there is no SHA, so Publish creates the file.
+    let isNew = false;
+    let originalText = '';
+    let baseSha = null;
+    let startText;
+    if (entry) {
+        try {
+            originalText = await getPageText({ site, token, sha: entry.sha, signal: controller.signal });
+        } catch (err) {
+            // For example no connection, and the page text is not saved on this device yet.
+            cannotOpen(err.offline
+                ? 'No connection. The text of this page is not saved on this device yet. Open the page again when you are online.'
+                : `The app cannot read this page: ${err.message}`);
+            return;
+        }
+        baseSha = entry.sha;
+        startText = originalText;
+    } else {
+        const newPage = await getLocalEdit(site.id, path).catch(() => null);
+        if (!newPage || newPage.baseSha) {
+            cannotOpen('This page is not in the saved list. Go back to the pages and tap Refresh.');
+            return;
+        }
+        isNew = true;
+        startText = newPage.text;
     }
-    let baseSha = entry.sha;
+    const siteHref = `#/site/${encodeURIComponent(site.id)}`;
+    let backHref = isNew ? siteHref : pageHref;
 
     // The state of the editor: the file parts, the front matter fields, and the text in the textarea.
     let parts;
@@ -80,7 +94,7 @@ export async function editorScreen(container, [siteId, path]) {
         const value = key => (parsed.data[key] == null || typeof parsed.data[key] === 'object' ? '' : String(parsed.data[key]));
         fields = { title: value('title'), date: value('date'), description: value('description') };
     };
-    load(originalText);
+    load(startText);
 
     // The whole file as it is now. When the front matter cannot be read, it stays exactly as it is.
     // A textarea always uses "\n", so the text gets the line ending of the file back (CRLF files stay CRLF).
@@ -94,7 +108,7 @@ export async function editorScreen(container, [siteId, path]) {
     container.innerHTML = `
 <div class="screen editor-screen" id="editor-screen">
     <header class="topbar editor-topbar">
-        <a class="icon-btn icon-btn--plain" href="${pageHref}" data-back aria-label="Back to the page">${icon('back', 22)}</a>
+        <a class="icon-btn icon-btn--plain" href="${backHref}" data-back aria-label="${isNew ? 'Back to the pages' : 'Back to the page'}">${icon('back', 22)}</a>
         <div class="segmented" role="group" aria-label="View">
             <button type="button" data-mode="write" aria-pressed="true">Write</button>
             <button type="button" data-mode="preview" aria-pressed="false">Preview</button>
@@ -104,7 +118,10 @@ export async function editorScreen(container, [siteId, path]) {
     <div class="editor-head">
         <div class="editor-meta-row">
             <span class="type-label type-label--${kind.type}">${TYPE_LABELS[kind.type]}</span>
-            <button type="button" class="btn-small" id="open-details" aria-haspopup="dialog">${icon('details', 16)} Details</button>
+            <span class="editor-head-actions">
+                ${isNew ? '<button type="button" class="btn-small" id="open-delete-new" aria-haspopup="dialog">Delete</button>' : ''}
+                <button type="button" class="btn-small" id="open-details" aria-haspopup="dialog">${icon('details', 16)} Details</button>
+            </span>
         </div>
         <h1 class="editor-title" id="editor-title" tabindex="-1"></h1>
         <div class="muted small">${escapeHtml(siteAddress(path))}</div>
@@ -145,12 +162,21 @@ export async function editorScreen(container, [siteId, path]) {
     <dialog class="sheet" id="conflict" aria-labelledby="conflict-title">
         <div class="sheet-body">
             <h2 class="sheet-title" id="conflict-title">The page changed on GitHub</h2>
-            <p>Someone changed this page on GitHub after you opened it. The app did not publish, so the other change is safe.</p>
-            <p>Your text stays on this device. Copy your text, open the new version of the page, and make your change again.</p>
+            <p id="conflict-text">Someone changed this page on GitHub after you opened it. The app did not publish, so the other change is safe.</p>
+            <p id="conflict-advice">Your text stays on this device. Copy your text, open the new version of the page, and make your change again.</p>
             <p class="muted small" id="copy-status" aria-live="polite"></p>
             <button type="button" class="btn btn-primary" id="copy-text">Copy my text</button>
-            <a class="btn btn-secondary" href="#/site/${encodeURIComponent(site.id)}" id="conflict-pages">Go to the pages</a>
+            <a class="btn btn-secondary" href="${siteHref}" id="conflict-pages">Go to the pages</a>
             <button type="button" class="btn btn-secondary" data-close>Close</button>
+        </div>
+    </dialog>
+
+    <dialog class="sheet" id="delete-new" aria-labelledby="delete-new-title">
+        <div class="sheet-body">
+            <h2 class="sheet-title" id="delete-new-title">Delete this new page?</h2>
+            <p>The page is not published. The app deletes it from this device. Nothing changes on GitHub.</p>
+            <button type="button" class="btn btn-danger" id="confirm-delete-new">Delete page</button>
+            <button type="button" class="btn btn-secondary" data-close>Cancel</button>
         </div>
     </dialog>
 </div>`;
@@ -174,6 +200,20 @@ export async function editorScreen(container, [siteId, path]) {
         $('#open-details').disabled = true;
         status('The app cannot read the front matter of this page. You can change the text. The front matter stays as it is.');
     }
+    if (isNew) status('This page is not published yet. It is kept on this device until you tap Publish.');
+
+    // ----- Delete a new page (only on this device) -----
+    const deleteDialog = $('#delete-new');
+    deleteDialog.querySelector('[data-close]').addEventListener('click', () => deleteDialog.close());
+    $('#open-delete-new')?.addEventListener('click', () => deleteDialog.showModal());
+    $('#confirm-delete-new').addEventListener('click', async () => {
+        clearTimeout(keepTimer);
+        isDeleted = true;
+        await deleteLocalEdit(site.id, path).catch(() => {});
+        deleteDialog.close();
+        navigate(siteHref, { replace: true });
+    });
+    let isDeleted = false;
 
     // ----- Keep changes on the device -----
     let keepTimer = null;
@@ -182,7 +222,7 @@ export async function editorScreen(container, [siteId, path]) {
     let restorePending = false;
     const keepNow = async () => {
         clearTimeout(keepTimer);
-        if (restorePending) return;
+        if (restorePending || isDeleted) return;
         const text = currentText();
         try {
             if (text === originalText) {
@@ -202,7 +242,7 @@ export async function editorScreen(container, [siteId, path]) {
 
     // ----- Restore changes from an earlier visit -----
     const local = await getLocalEdit(site.id, path).catch(() => null);
-    if (local && local.text !== originalText) {
+    if (!isNew && local && local.text !== originalText) {
         const banner = $('#restore-banner');
         const changedSince = local.baseSha !== entry.sha
             ? ' The page also changed on GitHub after that, so Publish can stop.'
@@ -368,19 +408,35 @@ export async function editorScreen(container, [siteId, path]) {
                 branch: site.branch,
                 path,
                 text,
-                sha: baseSha,
-                message: `Edit ${kind.slug} with Gorilla To Go`,
+                // No SHA for a new page: GitHub then creates the file, and refuses when it exists.
+                sha: baseSha ?? undefined,
+                message: `${isNew ? 'Add' : 'Edit'} ${kind.slug} with Gorilla To Go`,
                 token
             });
             originalText = text;
             baseSha = saved.sha;
             await recordSavedPage({ site, path, sha: saved.sha, text });
+            if (isNew) {
+                // From now on this is a page on GitHub, and the address cannot change.
+                isNew = false;
+                backHref = pageHref;
+                $('[data-back]').setAttribute('href', pageHref);
+                $('[data-back]').setAttribute('aria-label', 'Back to the page');
+                $('#open-delete-new')?.remove();
+            }
             // Keep what the user typed during Publish (keepNow deletes the kept copy only when the
             // text is the same as the published text).
             await keepNow();
             status(`Published at ${listTimeText(Date.now())}. The site updates in a few minutes.`);
         } catch (err) {
-            if (err.conflict) {
+            if (err.conflict && isNew) {
+                status('Not published: a page with this address exists on GitHub. Your text is kept on this device.');
+                $('#conflict-title').textContent = 'A page with this address exists';
+                $('#conflict-text').textContent = 'Someone made a page with this address on GitHub. The app did not publish, so that page is safe.';
+                $('#conflict-advice').textContent = 'Your text stays on this device. Copy your text, make a new page with a different address, and paste your text.';
+                $('#copy-status').textContent = '';
+                conflict.showModal();
+            } else if (err.conflict) {
                 status('Not published: the page changed on GitHub. Your changes are kept on this device.');
                 $('#copy-status').textContent = '';
                 conflict.showModal();
@@ -399,7 +455,7 @@ export async function editorScreen(container, [siteId, path]) {
     // ----- Back -----
     container.querySelector('[data-back]').addEventListener('click', event => {
         event.preventDefault();
-        back(pageHref);
+        back(backHref);
     });
 
     // ----- Keep the toolbar above the phone keyboard -----

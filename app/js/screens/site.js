@@ -4,7 +4,9 @@ import { getTemplateVersion, REQUIRED_TEMPLATE_VERSION } from '../github.js';
 import { getToken } from '../auth.js';
 import { getSite, listSites, removeSite, setLastSiteId, updateSite } from '../sites.js';
 import { loadPages, deviceStore } from '../pages.js';
-import { filterPages, formatDate, listTimeText, sortPages, TYPE_LABELS } from '../pages-logic.js';
+import { listNewPages } from '../edits.js';
+import { parseFrontmatter } from '../frontmatter.js';
+import { classifyPath, filterPages, formatDate, listTimeText, sortPages, TYPE_LABELS } from '../pages-logic.js';
 import { escapeHtml, icon } from '../dom.js';
 import { navigate } from '../router.js';
 import { themeToggleHtml, bindThemeToggles } from '../theme.js';
@@ -102,8 +104,13 @@ export async function siteScreen(container, [id]) {
             <span class="muted small" id="list-status" aria-live="polite"></span>
             <button type="button" class="btn-small" id="refresh">${icon('refresh', 16)} Refresh</button>
         </div>
+        <section id="new-pages" hidden aria-labelledby="new-pages-title">
+            <h2 class="card-title section-title" id="new-pages-title">Not published</h2>
+            <ul class="page-list" id="new-page-list"></ul>
+        </section>
         <ul class="page-list" id="page-list"></ul>
         <div id="list-message"></div>
+        <a class="fab" href="#/site/${encodeURIComponent(site.id)}/new" aria-label="New page">${icon('plus', 28, 2.2)}</a>
     </div>
 
     <dialog class="sheet" id="switcher" aria-labelledby="switcher-title">
@@ -268,6 +275,21 @@ export async function siteScreen(container, [id]) {
     else if (saved) pages = sortPages(saved.pages);
     renderList();
     load();
+
+    // New pages that are kept on this device and not published yet (build step 5).
+    listNewPages(site.id).then(newPages => {
+        if (controller.signal.aborted || newPages.length === 0) return;
+        $('#new-page-list').innerHTML = newPages.map(edit => {
+            const kind = classifyPath(edit.path);
+            const title = parseFrontmatter(edit.text).data.title || kind.slug;
+            return `<li><a class="page-card" href="#/site/${encodeURIComponent(site.id)}/edit/${encodeURIComponent(edit.path)}">
+                <span class="page-card-text">
+                    <span class="page-meta"><span class="type-label type-label--${kind.type}">${TYPE_LABELS[kind.type]}</span><span class="draft-label">Not published</span></span>
+                    <span class="page-card-title">${escapeHtml(String(title))}</span>
+                </span>${icon('chevronRight', 18)}</a></li>`;
+        }).join('');
+        $('#new-pages').hidden = false;
+    }).catch(() => {});
 
     // ----- Template version -----
     getToken(site.id)
