@@ -7,7 +7,7 @@ import { getToken } from '../auth.js';
 import { getSite } from '../sites.js';
 import { getPageText, recordSavedPage, deviceStore } from '../pages.js';
 import { parseFrontmatter } from '../frontmatter.js';
-import { splitPage, composePage, setFields } from '../frontmatter-write.js';
+import { splitPage, composePage, setFields, editedBody } from '../frontmatter-write.js';
 import { classifyPath, listTimeText, TYPE_LABELS } from '../pages-logic.js';
 import { toggleWrap, toggleLinePrefix, insertLink, createHistory } from '../editor-logic.js';
 import { getLocalEdit, saveLocalEdit, deleteLocalEdit } from '../edits.js';
@@ -72,7 +72,7 @@ export async function editorScreen(container, [siteId, path]) {
 
     // The whole file as it is now. When the front matter cannot be read, it stays exactly as it is.
     // A textarea always uses "\n", so the text gets the line ending of the file back (CRLF files stay CRLF).
-    const bodyText = () => textarea.value.replace(/\r?\n/g, parts.eol);
+    const bodyText = () => editedBody(textarea.value, parts.body, parts.eol);
     const currentText = () => {
         if (frontmatterError) return composePage({ ...parts, body: bodyText() });
         const raw = setFields(parts.raw, fields);
@@ -165,8 +165,12 @@ export async function editorScreen(container, [siteId, path]) {
 
     // ----- Keep changes on the device -----
     let keepTimer = null;
+    // While the Restore choice shows, nothing is kept: the earlier changes must stay until the user
+    // taps Restore or Discard.
+    let restorePending = false;
     const keepNow = async () => {
         clearTimeout(keepTimer);
+        if (restorePending) return;
         const text = currentText();
         try {
             if (text === originalText) {
@@ -194,7 +198,9 @@ export async function editorScreen(container, [siteId, path]) {
         banner.innerHTML = `<span>This page has changes from ${escapeHtml(listTimeText(local.savedAt))} that are not published.${changedSince}</span>
             <span class="banner-actions"><button type="button" class="btn-small" id="restore">Restore</button><button type="button" class="btn-small" id="discard">Discard</button></span>`;
         banner.hidden = false;
+        restorePending = true;
         $('#restore').addEventListener('click', () => {
+            restorePending = false;
             // Publish with the SHA that the changes started from, so GitHub refuses the save when
             // the page changed after that.
             baseSha = local.baseSha;
@@ -206,9 +212,11 @@ export async function editorScreen(container, [siteId, path]) {
             status(`Restored the changes from ${listTimeText(local.savedAt)}.`);
         });
         $('#discard').addEventListener('click', async () => {
+            restorePending = false;
             await deleteLocalEdit(site.id, path).catch(() => {});
             banner.hidden = true;
             status('');
+            keepNow(); // Keep what the user typed while the choice showed.
         });
     }
 
@@ -273,22 +281,35 @@ export async function editorScreen(container, [siteId, path]) {
     details.addEventListener('click', event => {
         if (event.target === details) details.close();
     });
+    // A date that the date field cannot show (for example 2026-07-15T10:00:00Z) stays as it is,
+    // unless the user changes the date field.
+    let dateTouched = false;
+    $('#field-date').addEventListener('input', () => {
+        dateTouched = true;
+    });
     $('#open-details').addEventListener('click', () => {
         $('#field-title').value = fields.title;
         $('#field-date').value = /^\d{4}-\d{2}-\d{2}$/.test(fields.date) ? fields.date : '';
         $('#field-description').value = fields.description;
         $('#details-error').textContent = '';
+        dateTouched = false;
         details.showModal();
     });
     $('#details-form').addEventListener('submit', event => {
         event.preventDefault();
-        const title = $('#field-title').value.trim();
-        if (!title) {
+        const typedTitle = $('#field-title').value.trim();
+        if (!typedTitle) {
             $('#details-error').textContent = 'Type a title.';
             $('#field-title').focus();
             return;
         }
-        fields = { title, date: $('#field-date').value, description: $('#field-description').value.trim() };
+        const typedDescription = $('#field-description').value.trim();
+        // Values that did not change keep their exact text, so their lines in the file do not change.
+        fields = {
+            title: typedTitle === fields.title.trim() ? fields.title : typedTitle,
+            date: dateTouched ? $('#field-date').value : fields.date,
+            description: typedDescription === fields.description.trim() ? fields.description : typedDescription
+        };
         showTitle();
         details.close();
         keepNow();
@@ -342,7 +363,9 @@ export async function editorScreen(container, [siteId, path]) {
             originalText = text;
             baseSha = saved.sha;
             await recordSavedPage({ site, path, sha: saved.sha, text });
-            await deleteLocalEdit(site.id, path).catch(() => {});
+            // Keep what the user typed during Publish (keepNow deletes the kept copy only when the
+            // text is the same as the published text).
+            await keepNow();
             status(`Published at ${listTimeText(Date.now())}. The site updates in a few minutes.`);
         } catch (err) {
             if (err.conflict) {
@@ -379,10 +402,17 @@ export async function editorScreen(container, [siteId, path]) {
     viewport?.addEventListener('scroll', fit);
     fit();
 
+    // When the app goes to the background (a phone can close it there), keep the changes at once.
+    const keepOnHide = () => {
+        if (document.visibilityState === 'hidden') keepNow();
+    };
+    document.addEventListener('visibilitychange', keepOnHide);
+
     return () => {
         controller.abort();
         viewport?.removeEventListener('resize', fit);
         viewport?.removeEventListener('scroll', fit);
+        document.removeEventListener('visibilitychange', keepOnHide);
         window.removeEventListener('beforeunload', warnBeforeClose);
         clearTimeout(historyTimer);
         if (keepTimer) keepNow(); // Keep the last changes when the user leaves the editor.

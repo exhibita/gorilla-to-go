@@ -6,29 +6,44 @@ import { parseFrontmatter } from './frontmatter.js';
 
 const BLOCK = /^(---[ \t]*\r?\n)(?:([\s\S]*?)(\r?\n))?(---[ \t]*(?:\r?\n|$))/;
 
-// { bom, eol, raw, body, hasFrontmatter, open, close }. raw uses "\n" line endings.
+// { bom, eol, raw, body, hasFrontmatter, open, close, rawExact, fmEol }.
+// raw uses "\n" line endings; rawExact is the front matter text with its own bytes. eol is the line
+// ending of the body (for text typed in the editor); fmEol is the line ending of the front matter.
 export function splitPage(text) {
     const source = String(text ?? '');
     const bom = source.startsWith('﻿') ? '﻿' : '';
     const rest = source.slice(bom.length);
-    const eol = /\r\n/.test(rest) ? '\r\n' : '\n';
     const match = rest.match(BLOCK);
-    if (!match) return { bom, eol, raw: '', body: rest, hasFrontmatter: false, open: `---${eol}`, close: `---${eol}` };
+    const body = match ? rest.slice(match[0].length) : rest;
+    const fmEol = match ? (match[1].endsWith('\r\n') ? '\r\n' : '\n') : (/\r\n/.test(rest) ? '\r\n' : '\n');
+    const eol = /\r\n/.test(body) ? '\r\n' : /\n/.test(body) ? '\n' : fmEol;
+    if (!match) return { bom, eol, raw: '', body, hasFrontmatter: false, open: `---${eol}`, close: `---${eol}`, rawExact: '', fmEol };
     return {
         bom,
         eol,
         raw: (match[2] ?? '').replace(/\r\n/g, '\n'),
-        body: rest.slice(match[0].length),
+        body,
         hasFrontmatter: true,
         open: match[1],
-        close: match[4]
+        close: match[4],
+        rawExact: match[2] === undefined ? '' : match[2] + match[3],
+        fmEol
     };
 }
 
-export function composePage({ bom = '', eol = '\n', raw, body, hasFrontmatter, open = `---${eol}`, close = `---${eol}` }) {
+// The page text from its parts. When raw did not change, the front matter keeps its exact bytes.
+export function composePage({ bom = '', eol = '\n', raw, body, hasFrontmatter, open, close, rawExact, fmEol = eol }) {
     if (!hasFrontmatter) return bom + body;
-    const yaml = raw === '' ? '' : raw.split('\n').join(eol) + eol;
-    return bom + open + yaml + close + body;
+    const unchanged = rawExact !== undefined && raw === rawExact.replace(/\r\n/g, '\n').replace(/\n$/, '');
+    const yaml = unchanged ? rawExact : raw === '' ? '' : raw.split('\n').join(fmEol) + fmEol;
+    return bom + (open ?? `---${fmEol}`) + yaml + (close ?? `---${fmEol}`) + body;
+}
+
+// The body to save: the original bytes when the text in the textarea did not change (a textarea
+// shows every line ending as "\n"), else the textarea text with the line ending of the body.
+export function editedBody(textareaValue, originalBody, eol) {
+    if (textareaValue === originalBody.replace(/\r\n?/g, '\n')) return originalBody;
+    return textareaValue.replace(/\n/g, eol);
 }
 
 // A YAML double-quoted string that the front matter parser (and gray-matter) reads back the same.

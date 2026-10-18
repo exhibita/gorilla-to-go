@@ -26,8 +26,10 @@ const ATTRIBUTES = {
     CODE: ['class']
 };
 
-// http, https, mailto, an anchor, or a relative address. Not javascript:, data: or other schemes.
-const SAFE_URL = /^(https?:|mailto:|#|\/|\.{1,2}\/|[^:]*$)/i;
+// Only links that open outside the app: http, https and mailto. Not javascript:, data: or other
+// schemes. Anchors (#...) and relative addresses are not links in the Preview: in the app they
+// would open another screen and close the editor.
+const SAFE_URL = /^(https?:\/\/|mailto:)/i;
 
 function clean(node, doc) {
     for (const child of [...node.childNodes]) {
@@ -58,6 +60,8 @@ function clean(node, doc) {
                 child.setAttribute('rel', 'noopener noreferrer');
             }
         }
+        // marked writes class="language-x" on code blocks. Other classes could use the app's own styles.
+        if (tag === 'CODE' && !/^language-[\w-]+$/.test(child.getAttribute('class') ?? '')) child.removeAttribute('class');
         if (tag === 'INPUT') {
             if (child.getAttribute('type') !== 'checkbox') {
                 child.remove();

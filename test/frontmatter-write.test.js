@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { splitPage, composePage, yamlText, setFields } from '../app/js/frontmatter-write.js';
+import { splitPage, composePage, yamlText, setFields, editedBody } from '../app/js/frontmatter-write.js';
 import { parseFrontmatter } from '../app/js/frontmatter.js';
 
 const SAMPLES = [
@@ -34,8 +34,14 @@ test('split then compose gives the same text for every real page in the local si
 });
 
 test('splitPage finds the line ending, the BOM and the parts', () => {
-    assert.deepEqual(splitPage('﻿---\r\ntitle: X\r\n---\r\nBody'), { bom: '﻿', eol: '\r\n', raw: 'title: X', body: 'Body', hasFrontmatter: true, open: '---\r\n', close: '---\r\n' });
-    assert.deepEqual(splitPage('Just text\n'), { bom: '', eol: '\n', raw: '', body: 'Just text\n', hasFrontmatter: false, open: '---\n', close: '---\n' });
+    assert.deepEqual(splitPage('﻿---\r\ntitle: X\r\n---\r\nBody'), {
+        bom: '﻿', eol: '\r\n', raw: 'title: X', body: 'Body', hasFrontmatter: true, open: '---\r\n', close: '---\r\n', rawExact: 'title: X\r\n', fmEol: '\r\n'
+    });
+    assert.deepEqual(splitPage('Just text\n'), {
+        bom: '', eol: '\n', raw: '', body: 'Just text\n', hasFrontmatter: false, open: '---\n', close: '---\n', rawExact: '', fmEol: '\n'
+    });
+    assert.equal(splitPage('---\ntitle: X\n---\r\nBody\r\n').eol, '\r\n', 'the body line ending, not the front matter one');
+    assert.equal(splitPage('---\ntitle: X\n---\r\nBody\r\n').fmEol, '\n');
     assert.equal(splitPage('---\ntitle: X\n---').close, '---', 'a closing line at the end of the file keeps having no line break');
 });
 
@@ -81,4 +87,17 @@ test('an edited page composes to valid front matter', () => {
 test('a page without front matter gets a block when a field is set', () => {
     const parts = splitPage('Body only\n');
     assert.equal(composePage({ ...parts, raw: setFields(parts.raw, { title: 'T', date: '', description: '' }), hasFrontmatter: true }), '---\ntitle: "T"\n---\nBody only\n');
+});
+
+test('mixed line endings round-trip: LF front matter with a CRLF body, and the reverse', () => {
+    for (const text of ['---\ntitle: X\n---\r\nBody\r\nMore\r\n', '---\r\ntitle: X\r\n---\nBody\nMore\n', '---\ntitle: X\n---\nA\r\nB\nC\r\n']) {
+        assert.equal(composePage(splitPage(text)), text, JSON.stringify(text));
+    }
+});
+
+test('editedBody gives back the original bytes when the textarea text did not change', () => {
+    const original = 'A\r\nB\nC\rD\r\n';
+    const inTextarea = original.replace(/\r\n?/g, '\n'); // What a textarea shows.
+    assert.equal(editedBody(inTextarea, original, '\r\n'), original);
+    assert.equal(editedBody(`${inTextarea}E\n`, original, '\r\n'), 'A\r\nB\r\nC\r\nD\r\nE\r\n');
 });

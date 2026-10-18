@@ -618,7 +618,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .segmented { display: flex; padding: 3px; border-radius: var(--radius); background: var(--bg-2); }
 
 .segmented button {
-    min-height: 38px;
+    min-height: 44px;
     padding: 0 16px;
     border: 0;
     border-radius: 9px;

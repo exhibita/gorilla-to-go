@@ -331,3 +331,46 @@ test('saveFile reports a refused token, no write access and no connection', asyn
     await assert.rejects(save(async () => json(403, {})), { message: 'No write access' });
     await assert.rejects(save(async () => { throw new TypeError('Failed to fetch'); }), err => err.offline === true);
 });
+
+// After a refused or timed-out save, the app reads the file: when it already has the user's text,
+// the save is a success (the first request reached GitHub), not a conflict.
+const fileRoute = (text, sha) => () => json(200, { sha, content: Buffer.from(text).toString('base64'), encoding: 'base64' });
+const saveArgs = { owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path: 'src/x/index.md', text: 'NEW TEXT', sha: 'OLDSHA', message: 'Edit', token: TOKEN };
+
+test('saveFile: a 409 for a file that already has the user text is a success', async () => {
+    const { fetch } = fakeFetch({
+        [`PUT ${REPO}/contents/src/x/index.md`]: () => json(409, {}),
+        [`GET ${REPO}/contents/src/x/index.md?ref=main`]: fileRoute('NEW TEXT', 'SAVEDSHA')
+    });
+    assert.deepEqual(await saveFile({ ...saveArgs, fetch }), { sha: 'SAVEDSHA' });
+});
+
+test('saveFile: a 409 for a file with other text is a conflict', async () => {
+    const { fetch } = fakeFetch({
+        [`PUT ${REPO}/contents/src/x/index.md`]: () => json(409, {}),
+        [`GET ${REPO}/contents/src/x/index.md?ref=main`]: fileRoute('SOMEONE ELSE', 'OTHERSHA')
+    });
+    await assert.rejects(saveFile({ ...saveArgs, fetch }), err => err.conflict === true);
+});
+
+test('saveFile: a 422 while the file is unchanged on GitHub is an error, not a conflict', async () => {
+    const { fetch } = fakeFetch({
+        [`PUT ${REPO}/contents/src/x/index.md`]: () => json(422, {}),
+        [`GET ${REPO}/contents/src/x/index.md?ref=main`]: fileRoute('OLD TEXT', 'OLDSHA')
+    });
+    await assert.rejects(saveFile({ ...saveArgs, fetch }), err => !err.conflict && err.message === 'GitHub error 422');
+});
+
+test('saveFile: when the save times out but GitHub saved it, the app finds the saved file', async () => {
+    let puts = 0;
+    const routes = { [`GET ${REPO}/contents/src/x/index.md?ref=main`]: fileRoute('NEW TEXT', 'SAVEDSHA') };
+    const fetch = async (url, init = {}) => {
+        if (init.method === 'PUT') {
+            puts++;
+            throw new TypeError('Failed to fetch');
+        }
+        return routes[`GET ${url.replace(API, '')}`]();
+    };
+    assert.deepEqual(await saveFile({ ...saveArgs, fetch }), { sha: 'SAVEDSHA' });
+    assert.equal(puts, 1);
+});
