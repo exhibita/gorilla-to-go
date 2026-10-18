@@ -1,6 +1,7 @@
 // GitHub API calls for Gorilla To Go. No DOM and no storage here: fetch and the token are
 // parameters, so the module runs in tests with a fake fetch.
 import { authorizationHeader } from './auth.js';
+import { classifyPath } from './pages-logic.js';
 
 const API = 'https://api.github.com';
 
@@ -176,3 +177,50 @@ export async function checkSite({ owner, repo, branch, token, fetch = globalThis
         return fail(running.id, 'No connection to GitHub');
     }
 }
+
+// An error for the page list: a message for the user, and offline: true when there is no connection.
+export class GitHubError extends Error {
+    constructor(message, { offline = false } = {}) {
+        super(message);
+        this.offline = offline;
+    }
+}
+
+// GET a JSON resource. Throws GitHubError with the message to show.
+async function getJson(fetch, token, path, net, notFoundMessage) {
+    let response;
+    try {
+        response = await request(fetch, token, path, net);
+    } catch (err) {
+        if (err instanceof CancelledError) throw err;
+        throw new GitHubError('No connection to GitHub', { offline: true });
+    }
+    if (response.status === 401) throw new GitHubError('Token not accepted');
+    if (response.status === 404) throw new GitHubError(notFoundMessage);
+    if (!response.ok) throw new GitHubError(`GitHub error ${response.status}`);
+    return response.json();
+}
+
+// The Markdown pages of the branch: two requests (branch → tree SHA → whole tree).
+// Returns { treeSha, truncated, files: [{ path, sha }] }. The tree SHA changes when any file changes.
+// When knownTreeSha equals the current tree SHA, the tree is not read again: returns { treeSha, unchanged: true }.
+export async function listMarkdownFiles({ owner, repo, branch, token, fetch = globalThis.fetch, signal, timeoutMs, knownTreeSha }) {
+    const net = { signal, timeoutMs };
+    const base = repoPath(owner, repo);
+    const branchData = await getJson(fetch, token, `${base}/branches/${encodeURIComponent(branch)}`, net, `Branch ${branch} not found`);
+    const treeSha = branchData.commit.commit.tree.sha;
+    if (knownTreeSha && treeSha === knownTreeSha) return { treeSha, unchanged: true };
+    const tree = await getJson(fetch, token, `${base}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`, net, 'Repository not found');
+    const files = tree.tree
+        .filter(entry => entry.type === 'blob' && classifyPath(entry.path))
+        .map(({ path, sha }) => ({ path, sha }));
+    return { treeSha, truncated: Boolean(tree.truncated), files };
+}
+
+// The text of one file, by its blob SHA.
+export async function getBlobText({ owner, repo, sha, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    const blob = await getJson(fetch, token, `${repoPath(owner, repo)}/git/blobs/${encodeURIComponent(sha)}`, { signal, timeoutMs }, 'File not found');
+    return decodeBase64(blob.content);
+}
+
+export { CancelledError };

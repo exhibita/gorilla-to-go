@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRepoInput, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION } from '../app/js/github.js';
+import { parseRepoInput, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText } from '../app/js/github.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -246,4 +246,51 @@ test('a run stops when the caller cancels it, and makes no more requests', async
     assert.equal(result.ok, false);
     assert.equal(result.cancelled, true);
     assert.equal(calls.length, 1);
+});
+
+// ---------- listMarkdownFiles and getBlobText ----------
+
+test('listMarkdownFiles reads the tree of the branch and returns the Markdown files under src/', async () => {
+    const routes = {
+        [`GET ${REPO}/branches/main`]: () => json(200, { commit: { commit: { tree: { sha: 'TREE1' } } } }),
+        [`GET ${REPO}/git/trees/TREE1?recursive=1`]: () => json(200, {
+            truncated: false,
+            tree: [
+                { path: 'src', type: 'tree', sha: 't0' },
+                { path: 'src/blog/a/index.md', type: 'blob', sha: 's1' },
+                { path: 'src/index.html', type: 'blob', sha: 's2' },
+                { path: 'src/templates/x.md', type: 'blob', sha: 's3' },
+                { path: 'README.md', type: 'blob', sha: 's4' },
+                { path: 'src/privacy/index.md', type: 'blob', sha: 's5' }
+            ]
+        })
+    };
+    const { fetch } = fakeFetch(routes);
+    const result = await listMarkdownFiles({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch });
+    assert.deepEqual(result, {
+        treeSha: 'TREE1',
+        truncated: false,
+        files: [{ path: 'src/blog/a/index.md', sha: 's1' }, { path: 'src/privacy/index.md', sha: 's5' }]
+    });
+});
+
+test('listMarkdownFiles reports a missing branch and a refused token', async () => {
+    const missing = fakeFetch({ [`GET ${REPO}/branches/main`]: () => json(404, {}) });
+    await assert.rejects(listMarkdownFiles({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch: missing.fetch }), { message: 'Branch main not found' });
+    const refused = fakeFetch({ [`GET ${REPO}/branches/main`]: () => json(401, {}) });
+    await assert.rejects(listMarkdownFiles({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch: refused.fetch }), { message: 'Token not accepted' });
+});
+
+test('listMarkdownFiles reports no connection with a recognizable error', async () => {
+    await assert.rejects(
+        listMarkdownFiles({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch: async () => { throw new TypeError('Failed to fetch'); } }),
+        err => err.offline === true && err.message === 'No connection to GitHub'
+    );
+});
+
+test('getBlobText decodes a blob as UTF-8 text', async () => {
+    const text = '---\ntitle: Café ✓\n---\nBody';
+    const routes = { [`GET ${REPO}/git/blobs/s1`]: () => json(200, { encoding: 'base64', content: Buffer.from(text).toString('base64') }) };
+    const { fetch } = fakeFetch(routes);
+    assert.equal(await getBlobText({ owner: 'exhibita', repo: 'gtg-test-site', sha: 's1', token: TOKEN, fetch }), text);
 });

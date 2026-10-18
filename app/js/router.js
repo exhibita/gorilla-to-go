@@ -1,5 +1,6 @@
-// Hash routing: #/, #/add, #/site/<id>, #/help/token, #/help/upgrade.
+// Hash routing: #/, #/add, #/site/<id>, #/site/<id>/page/<path>, #/help/token, #/help/upgrade.
 // Hash routes work at a domain root and at a subpath, and need no server rules.
+import { escapeHtml } from './dom.js';
 
 const routes = [];
 const visited = []; // The hashes of this session, to know when "Back" can use the browser history.
@@ -39,13 +40,23 @@ async function render() {
         const match = hash.match(pattern);
         if (match) {
             window.scrollTo(0, 0);
+            // Each screen gets its own element. When the user opens another screen before this one
+            // is ready, this element is no longer on the page, so late work here shows nothing.
+            const target = document.createElement('div');
+            container.replaceChildren(target);
+            let result = null;
             try {
-                cleanup = (await handler(container, match.slice(1).map(decodeURIComponent))) || null;
-            } catch {
-                showError();
+                result = (await handler(target, match.slice(1).map(decodeURIComponent))) || null;
+            } catch (err) {
+                if (target.isConnected) showError(target, err?.userMessage);
             }
+            if (!target.isConnected) {
+                result?.(); // A newer screen is open: stop the work of this one.
+                return;
+            }
+            cleanup = result;
             // Move focus to the screen title, so screen readers announce the new screen.
-            container.querySelector('h1')?.focus({ preventScroll: true });
+            target.querySelector('h1')?.focus({ preventScroll: true });
             return;
         }
     }
@@ -53,18 +64,18 @@ async function render() {
 }
 
 // Shown when a screen cannot open, for example when the browser blocks storage.
-function showError() {
-    container.innerHTML = `
+function showError(target, userMessage) {
+    target.innerHTML = `
 <div class="screen">
     <div class="screen-body">
         <h1 class="page-title" tabindex="-1">The screen did not open</h1>
-        <p>The app cannot open this screen.</p>
-        <p class="muted">In a private window, the browser can stop the app from storing data. Use a normal window.</p>
+        <p>${userMessage ? escapeHtml(userMessage) : 'The app cannot open this screen.'}</p>
+        ${userMessage ? '' : '<p class="muted">In a private window, the browser can stop the app from storing data. Use a normal window.</p>'}
         <button type="button" class="btn btn-primary" data-reload>Try again</button>
         <a class="text-link" href="#/">Go to the start screen</a>
     </div>
 </div>`;
-    container.querySelector('[data-reload]').addEventListener('click', () => location.reload());
+    target.querySelector('[data-reload]').addEventListener('click', () => location.reload());
 }
 
 export function startRouter(element) {

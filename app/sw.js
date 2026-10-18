@@ -2,7 +2,7 @@
 // GitHub API requests always go to the network and are never cached.
 // When you add, rename or remove a file in app/, update ASSETS (a test checks this).
 // When you release a new version, VERSION changes with app/js/version.js (a test checks this).
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const CACHE = `gtg-${VERSION}`;
 const NETWORK_WAIT_MS = 3000;
 
@@ -27,10 +27,14 @@ const ASSETS = [
     'js/auth.js',
     'js/db.js',
     'js/dom.js',
+    'js/frontmatter.js',
     'js/github.js',
+    'js/pages-logic.js',
+    'js/pages.js',
     'js/router.js',
     'js/screens/add-site.js',
     'js/screens/help.js',
+    'js/screens/page.js',
     'js/screens/site.js',
     'js/screens/welcome.js',
     'js/sites-logic.js',

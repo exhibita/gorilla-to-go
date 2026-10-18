@@ -10,7 +10,6 @@ test('VERSION in app/js/version.js equals the package.json version', async () =>
     const pkg = JSON.parse(read('package.json'));
     const { VERSION } = await import('../app/js/version.js');
     assert.equal(VERSION, pkg.version);
-    assert.equal(VERSION, '0.1.0');
 });
 
 test('the manifest names the app and uses relative URLs', () => {
