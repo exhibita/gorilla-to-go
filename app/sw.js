@@ -32,6 +32,7 @@ const ASSETS = [
     'js/frontmatter-write.js',
     'js/frontmatter.js',
     'js/github.js',
+    'js/new-page.js',
     'js/pages-logic.js',
     'js/pages.js',
     'js/router.js',

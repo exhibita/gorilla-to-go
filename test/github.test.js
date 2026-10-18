@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRepoInput, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText, saveFile } from '../app/js/github.js';
+import { parseRepoInput, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText, saveFile, pathExists } from '../app/js/github.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -373,4 +373,23 @@ test('saveFile: when the save times out but GitHub saved it, the app finds the s
     };
     assert.deepEqual(await saveFile({ ...saveArgs, fetch }), { sha: 'SAVEDSHA' });
     assert.equal(puts, 1);
+});
+
+// ---------- pathExists ----------
+
+test('pathExists asks GitHub for the folder or file on the branch', async () => {
+    const { fetch, calls } = fakeFetch({
+        [`GET ${REPO}/contents/src/blog/taken?ref=main`]: () => json(200, [{ name: 'index.md' }]),
+        [`GET ${REPO}/contents/src/blog/free?ref=main`]: () => json(404, {})
+    });
+    const ask = path => pathExists({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path, token: TOKEN, fetch });
+    assert.equal(await ask('src/blog/taken'), true);
+    assert.equal(await ask('src/blog/free'), false);
+    assert.ok(calls.every(c => c.headers.Authorization === `Bearer ${TOKEN}`));
+});
+
+test('pathExists reports a refused token and no connection', async () => {
+    const ask = fetch => pathExists({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path: 'src/x', token: TOKEN, fetch });
+    await assert.rejects(ask(async () => json(401, {})), { message: 'Token not accepted' });
+    await assert.rejects(ask(async () => { throw new TypeError('Failed to fetch'); }), err => err.offline === true);
 });

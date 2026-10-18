@@ -280,3 +280,15 @@ export async function saveFile({ owner, repo, branch, path, text, sha, message, 
     const data = await response.json();
     return { sha: data.content.sha };
 }
+
+// True when a file or folder exists on the branch (to check the address of a new page).
+export async function pathExists({ owner, repo, branch, path, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    const filePath = String(path).split('/').map(encodeURIComponent).join('/');
+    try {
+        await getJson(fetch, token, `${repoPath(owner, repo)}/contents/${filePath}?ref=${encodeURIComponent(branch)}`, { signal, timeoutMs }, 'not found');
+        return true;
+    } catch (err) {
+        if (err instanceof GitHubError && err.message === 'not found') return false;
+        throw err;
+    }
+}
