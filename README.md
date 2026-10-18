@@ -27,7 +27,7 @@ To test on a phone, the app needs HTTPS:
 2. In a second terminal, run `ngrok http 5173`.
 3. On the phone, open the HTTPS address that ngrok shows.
 
-Only the `app/` folder is published.
+Only the `app/` folder is published. GitHub Pages hosts it at https://gtg.exhibita.com. See [docs/hosting.md](docs/hosting.md).
 
 ## Documents
 
@@ -37,5 +37,6 @@ Only the `app/` folder is published.
 | [docs/decisions.md](docs/decisions.md) | The decision log |
 | [docs/design.md](docs/design.md) | Themes, colors, typography and screen designs |
 | [docs/vanilla-gorilla-notes.md](docs/vanilla-gorilla-notes.md) | How Vanilla Gorilla works, and what GTG depends on |
+| [docs/hosting.md](docs/hosting.md) | How GitHub Pages hosts GTG, and how to set up the domain |
 | [docs/future.md](docs/future.md) | Features for versions after the MVP |
 | [docs/name-research.md](docs/name-research.md) | Name candidates and the name checks |

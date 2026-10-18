@@ -27,6 +27,7 @@ All decisions were made on 2026-10-17 unless a different date is shown.
 | 21 | Each entry in the gallery `images:` list has the fields `path`, `alt` and `caption`. `path` starts with `./` and is relative to `src/`, for example `./images/gallery/<slug>/photo.jpg`. GTG writes `./images/...` paths in Markdown text too. |
 | 22 | A page is a draft when its frontmatter has `draft: true`. The string `"true"` (any case) is also a draft. GTG writes the boolean `true`. |
 | 23 | The GTG test site is the GitHub repository `exhibita/gtg-test-site`, deployed with GitHub Pages. |
+| 24 | The repository `exhibita/gorilla-to-go` is public. A GitHub Actions workflow deploys the `app/` folder to GitHub Pages on each push to `main` (decision 18, `docs/hosting.md`). |
 
 ## Notes
 
