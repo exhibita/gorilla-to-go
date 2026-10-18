@@ -40,7 +40,7 @@
 
 | Operation | What the app does |
 |---|---|
-| Add | Makes a slug from the title, writes `index.md` with frontmatter (`title`, `date`, `description`, `skeleton`) and commits it. |
+| Add | Makes a slug from the title, writes `index.md` with frontmatter (`title`, `date`, `description`, `skeleton`) and commits it when the user taps Publish (decision 26). |
 | Edit | Reads the file and its SHA, changes it and commits the change. |
 | Delete | Deletes the file. The next build updates the index pages, RSS feed and sitemap. |
 
