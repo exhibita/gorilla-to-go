@@ -45,6 +45,21 @@ test('splitPage finds the line ending, the BOM and the parts', () => {
     assert.equal(splitPage('---\ntitle: X\n---').close, '---', 'a closing line at the end of the file keeps having no line break');
 });
 
+test('yamlText escapes U+0085, U+2028 and U+2029, and the parser reads them back', () => {
+    for (const value of ['Line\u2028separator', 'Para\u2029separator', 'Next\u0085line']) {
+        const written = yamlText(value);
+        assert.doesNotMatch(written, /[\u0085\u2028\u2029]/, 'escaped, not raw');
+        const { data, error } = parseFrontmatter(`---\ntitle: ${written}\n---\n`);
+        assert.equal(error, null);
+        assert.equal(data.title, value);
+    }
+    // A page that has the raw character (written by another tool) can be read too.
+    const raw = parseFrontmatter('---\ntitle: A\u2028B\ndescription: "C\u2029D"\n---\n');
+    assert.equal(raw.error, null);
+    assert.equal(raw.data.title, 'A\u2028B');
+    assert.equal(raw.data.description, 'C\u2029D');
+});
+
 test('yamlText writes double-quoted text that reads back the same', () => {
     const values = ['Plain', 'Recipe: "Pasta" & more', 'Back\\slash', 'Hash # tag', 'Two\nlines', "It's", '  spaces  ', '*star', 'Tab\there', 'Café ✓'];
     for (const value of values) {

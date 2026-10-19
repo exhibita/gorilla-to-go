@@ -48,7 +48,8 @@ export function editedBody(textareaValue, originalBody, eol) {
 
 // A YAML double-quoted string that the front matter parser (and gray-matter) reads back the same.
 export function yamlText(value) {
-    const escaped = String(value).replace(/[\\"\u0000-\u001f\u007f]/g, char => {
+    // U+0085, U+2028 and U+2029 are line breaks for some YAML readers: escape them too.
+    const escaped = String(value).replace(/[\\"\u0000-\u001f\u007f\u0085\u2028\u2029]/g, char => {
         const named = { '\\': '\\\\', '"': '\\"', '\n': '\\n', '\t': '\\t', '\r': '\\r' }[char];
         return named ?? `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`;
     });

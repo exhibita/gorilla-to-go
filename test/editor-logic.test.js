@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toggleWrap, toggleLinePrefix, insertLink, createHistory } from '../app/js/editor-logic.js';
+import { toggleWrap, toggleLinePrefix, insertLink, createHistory, continueList } from '../app/js/editor-logic.js';
 
 // "Hello [world]" → { text, start, end } with the selection between the brackets.
 const at = marked => {
@@ -79,4 +79,53 @@ test('undo after bold gives back the selected word, so bold can be used again on
     history.push({ text: 'Hello world', start: 6, end: 11 }); // The user selects "world".
     history.push({ text: 'Hello **world**', start: 8, end: 13 }); // Bold.
     assert.deepEqual(history.undo(), { text: 'Hello world', start: 6, end: 11 });
+});
+
+// ---------- continueList: the text just after the user typed Enter; | is the cursor ----------
+
+const afterEnter = marked => ({ text: marked.replace('|', ''), start: marked.indexOf('|'), end: marked.indexOf('|') });
+const result = state => (state ? `${state.text.slice(0, state.start)}|${state.text.slice(state.start)}` : null);
+
+test('continueList starts the next item of a bullet list', () => {
+    assert.equal(result(continueList(afterEnter('- one\n|'))), '- one\n- |');
+    assert.equal(result(continueList(afterEnter('* one\n|'))), '* one\n* |');
+    assert.equal(result(continueList(afterEnter('Intro\n\n  + one\n|\nAfter'))), 'Intro\n\n  + one\n  + |\nAfter', 'indent and marker stay');
+});
+
+test('continueList counts on in a numbered list, and a task list starts an open task', () => {
+    assert.equal(result(continueList(afterEnter('1. one\n|'))), '1. one\n2. |');
+    assert.equal(result(continueList(afterEnter('9) nine\n|'))), '9) nine\n10) |');
+    assert.equal(result(continueList(afterEnter('- [x] done\n|'))), '- [x] done\n- [ ] |');
+});
+
+test('continueList continues a quote', () => {
+    assert.equal(result(continueList(afterEnter('> A quote\n|'))), '> A quote\n> |');
+});
+
+test('continueList ends the list when the item is empty', () => {
+    assert.equal(result(continueList(afterEnter('- one\n- \n|'))), '- one\n|');
+    assert.equal(result(continueList(afterEnter('- one\n- \n|\nNext'))), '- one\n|\nNext');
+    assert.equal(result(continueList(afterEnter('1. one\n2. \n|'))), '1. one\n|');
+    assert.equal(result(continueList(afterEnter('> \n|'))), '|');
+});
+
+test('continueList splits an item: the text after the cursor becomes the next item', () => {
+    assert.equal(result(continueList(afterEnter('- one\n|two'))), '- one\n- |two');
+    assert.equal(result(continueList(afterEnter('- \n|two'))), '- \n- |two', 'Enter just after the marker');
+});
+
+test('continueList does nothing outside a list, in a code block, on a rule, or with a selection', () => {
+    assert.equal(continueList(afterEnter('Text\n|')), null);
+    assert.equal(continueList(afterEnter('**bold**\n|')), null);
+    assert.equal(continueList(afterEnter('-not a list\n|')), null);
+    assert.equal(continueList(afterEnter('```\n- code\n|')), null);
+    assert.equal(continueList(afterEnter('* * *\n|')), null);
+    assert.equal(continueList(afterEnter('- - -\n|')), null);
+    assert.equal(continueList({ text: '- one\nx', start: 6, end: 7 }), null);
+    assert.equal(continueList(afterEnter('- one|')), null, 'no line break before the cursor');
+});
+
+test('continueList gives the edit for the textarea', () => {
+    assert.deepEqual(continueList(afterEnter('- one\n|')).edit, { from: 6, to: 6, insert: '- ' });
+    assert.deepEqual(continueList(afterEnter('- one\n- \n|')).edit, { from: 6, to: 9, insert: '' });
 });
