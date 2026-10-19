@@ -53,6 +53,16 @@ The app checks the token automatically.
 - **"Repository not found":** make sure you selected the site's repository in step 12.
 - **"No write access":** make sure **Contents** is set to **Read and write** in step 14.
 - **"No Actions access":** make sure **Actions** is set to **Read-only** in step 15.
-- **The site belongs to an organization:** the organization owner may need to approve the token first.
+- **The site belongs to an organization:** see the next section.
+
+## If the site belongs to an organization
+
+GitHub says "Repository not found" when the token cannot see the repository. For an organization, check these items:
+
+1. You are a member of the organization, with write access to the repository. An outside collaborator cannot make a token for an organization.
+2. In step 10, **Resource owner** is the organization, not your own account. If the organization is not in the list, the organization does not allow fine-grained tokens. Ask an organization owner to allow them.
+3. The organization approved the token. An organization owner opens the organization's **Settings**, then **Personal access tokens**, then **Pending requests**, and approves the token.
+
+Organization owners set the rules in the organization's **Settings** > **Personal access tokens** > **Settings**: allow fine-grained tokens, and choose if each token needs approval.
 
 Note: GitHub sometimes changes the names and places of these settings. If a step does not match, look for **Fine-grained tokens** in **Developer settings**.
