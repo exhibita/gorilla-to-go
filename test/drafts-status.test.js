@@ -4,7 +4,7 @@ import { setDraft } from '../app/js/frontmatter-write.js';
 import { parseFrontmatter, isDraft } from '../app/js/frontmatter.js';
 import { filterPages } from '../app/js/pages-logic.js';
 import { listBuildRuns, saveFile, deleteFile } from '../app/js/github.js';
-import { buildState, buildStatusText, buildStatusHtml, watchBuild, rememberCommit, recentCommit } from '../app/js/build-status.js';
+import { buildState, buildStatusText, buildStatusHtml, showBuildStatus, watchBuild, rememberCommit, recentCommit } from '../app/js/build-status.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -63,7 +63,7 @@ test('listBuildRuns asks for the runs of the branch (and the commit) and gives t
     const runs = await listBuildRuns({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', headSha: 'C1', token: TOKEN, fetch });
     assert.equal(calls[0].url, `${API}${REPO}/actions/runs?branch=main&per_page=20&head_sha=C1`);
     assert.equal(calls[0].init.headers.Authorization, `Bearer ${TOKEN}`);
-    assert.deepEqual(runs, [{ sha: 'C1', status: 'completed', conclusion: 'success', url: RUN().html_url, createdAt: RUN().created_at, updatedAt: RUN().updated_at }]);
+    assert.deepEqual(runs, [{ sha: 'C1', event: undefined, status: 'completed', conclusion: 'success', url: RUN().html_url, createdAt: RUN().created_at, updatedAt: RUN().updated_at }]);
     await listBuildRuns({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch });
     assert.equal(calls[1].url, `${API}${REPO}/actions/runs?branch=main&per_page=20`);
 });
@@ -183,14 +183,71 @@ test('watchBuild stops when the signal stops it, and after the time limit', asyn
     assert.ok(clock >= 20 * 60 * 1000);
 });
 
-test('watchBuild stops at once without Actions access, and when offline', async () => {
-    for (const [err, state] of [[Object.assign(new Error('x'), { noAccess: true }), 'noAccess'], [Object.assign(new Error('x'), { offline: true }), 'offline']]) {
-        let calls = 0;
-        const states = [];
-        await watchBuild({ list: async () => { calls++; throw err; }, sha: 'C1', onChange: s => states.push(s.state), sleep: async () => {} });
-        assert.equal(calls, 1);
-        assert.deepEqual(states, [state]);
-    }
+test('watchBuild stops at once without Actions access', async () => {
+    let calls = 0;
+    const states = [];
+    await watchBuild({ list: async () => { calls++; throw Object.assign(new Error('x'), { noAccess: true }); }, sha: 'C1', onChange: s => states.push(s.state), sleep: async () => {} });
+    assert.equal(calls, 1);
+    assert.deepEqual(states, ['noAccess']);
+});
+
+test('watchBuild asks again after 30 seconds when the connection drops', async () => {
+    let calls = 0;
+    const states = [];
+    const waits = [];
+    await watchBuild({
+        list: async () => {
+            calls++;
+            if (calls === 2) throw Object.assign(new Error('x'), { offline: true });
+            return calls < 3 ? [run('C1', 'in_progress')] : [run('C1', 'completed', 'success')];
+        },
+        sha: 'C1',
+        onChange: s => states.push(s.state),
+        sleep: async ms => { waits.push(ms); }
+    });
+    assert.deepEqual(states, ['publishing', 'offline', 'live']);
+    assert.deepEqual(waits, [5000, 30000]);
+});
+
+test('buildState counts only the runs that build the site', () => {
+    const runs = [
+        { ...run('C1', 'completed', 'success'), event: 'push' },
+        { ...run('C1', 'completed', 'failure'), event: 'pull_request' },
+        { ...run('C2', 'completed', 'failure', '2026-10-18T11:00:00Z'), event: 'schedule' }
+    ];
+    assert.equal(buildState(runs, { sha: 'C1' }).state, 'live');
+    assert.equal(buildState(runs).state, 'live', 'a newer scheduled run is not the newest build');
+    assert.equal(buildState([{ ...run('C1', 'in_progress'), event: 'dynamic' }], { sha: 'C1' }).state, 'publishing');
+});
+
+test('buildState: a stale or empty conclusion is not Live, and a run without a time is fine', () => {
+    assert.equal(buildState([run('C1', 'completed', 'stale')], { sha: 'C1' }).state, 'stopped');
+    assert.equal(buildState([run('C1', 'completed', null)], { sha: 'C1' }).state, 'stopped');
+    const live = buildState([{ ...run('C1', 'completed', 'success'), updatedAt: undefined }], { sha: 'C1' });
+    assert.equal(live.state, 'live');
+    assert.equal(live.updatedAt, undefined);
+});
+
+test('buildStatusText: Live after a draft save does not say that the site shows the changes', () => {
+    assert.equal(buildStatusText({ state: 'live' }, { draft: true }).sentence, 'The build is complete. The site does not show this draft.');
+    assert.match(buildStatusHtml({ state: 'live' }, { draft: true }), /does not show this draft/);
+});
+
+test('showBuildStatus changes the element only when the text changes', () => {
+    let writes = 0;
+    const element = { dataset: {}, set innerHTML(value) { writes++; this.value = value; } };
+    showBuildStatus(element, '<b>A</b>');
+    showBuildStatus(element, '<b>A</b>');
+    showBuildStatus(element, '<b>B</b>');
+    assert.equal(writes, 2);
+});
+
+test('listBuildRuns: a 403 because of the rate limit is not "no access"', async () => {
+    const limited = async () => new Response('{}', { status: 403, headers: { 'x-ratelimit-remaining': '0' } });
+    await assert.rejects(
+        listBuildRuns({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', token: TOKEN, fetch: limited }),
+        err => !err.noAccess && err.message === 'GitHub error 403'
+    );
 });
 
 // ---------- Commit SHAs ----------

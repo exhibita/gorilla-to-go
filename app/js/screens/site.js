@@ -1,7 +1,7 @@
 // The site screen: the Pages list (mvp-plan section 6, screen 3), with search and type filters.
 // The site sheet has the site details, the template version check, and "Remove this site".
 import { getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listBuildRuns } from '../github.js';
-import { watchBuild, buildStatusHtml, recentCommit } from '../build-status.js';
+import { watchBuild, buildStatusHtml, showBuildStatus, recentCommit } from '../build-status.js';
 import { getToken } from '../auth.js';
 import { getSite, listSites, removeSite, setLastSiteId, updateSite } from '../sites.js';
 import { loadPages, deviceStore } from '../pages.js';
@@ -306,7 +306,7 @@ export async function siteScreen(container, [id]) {
                 // No builds at all, or no connection (the list says so): no line.
                 line.hidden = (state.state === 'none' && !sha) || state.state === 'offline';
                 const time = state.updatedAt ? listTimeText(Date.parse(state.updatedAt)) : '';
-                line.innerHTML = buildStatusHtml(state, { time });
+                showBuildStatus(line, buildStatusHtml(state, { time }));
             }
         });
     };

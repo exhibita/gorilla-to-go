@@ -244,7 +244,8 @@ function encodeBase64(text) {
 
 // Save a changed file as one commit on the branch. sha is the SHA of the file that the user opened:
 // when the file changed on GitHub since then, GitHub refuses the save (409), so nothing is overwritten
-// (mvp-plan section 9). Returns { sha } of the saved file.
+// (mvp-plan section 9). Returns { sha } of the saved file, and { commitSha } when GitHub gives it
+// (not after a time-out or a refusal that the app found to be an earlier save of the same text).
 export async function saveFile({ owner, repo, branch, path, text, sha, message, token, fetch = globalThis.fetch, signal, timeoutMs }) {
     const filePath = String(path).split('/').map(encodeURIComponent).join('/');
     const contentsPath = `${repoPath(owner, repo)}/contents/${filePath}`;
@@ -491,21 +492,28 @@ export async function listFolder({ owner, repo, branch, path, token, fetch = glo
 }
 
 // The GitHub Actions runs of the branch (newest first), or of one commit (headSha), for the publish
-// status. Returns [{ sha, status, conclusion, url, createdAt, updatedAt }]. A token without the
+// status. Returns [{ sha, event, status, conclusion, url, createdAt, updatedAt }]. A token without the
 // Actions (read) permission gives an error with noAccess: true.
 export async function listBuildRuns({ owner, repo, branch, headSha, token, fetch = globalThis.fetch, signal, timeoutMs }) {
     const query = `branch=${encodeURIComponent(branch)}&per_page=20${headSha ? `&head_sha=${encodeURIComponent(headSha)}` : ''}`;
-    let data;
+    let response;
     try {
-        data = await getJson(fetch, token, `${repoPath(owner, repo)}/actions/runs?${query}`, { signal, timeoutMs }, 'no access');
+        response = await request(fetch, token, `${repoPath(owner, repo)}/actions/runs?${query}`, { signal, timeoutMs });
     } catch (err) {
-        if (err instanceof GitHubError && (err.message === 'no access' || err.message === 'GitHub error 403')) {
-            throw Object.assign(new GitHubError('No Actions access'), { noAccess: true });
-        }
-        throw err;
+        if (err instanceof CancelledError) throw err;
+        throw new GitHubError('No connection to GitHub', { offline: true });
     }
+    if (response.status === 401) throw new GitHubError('Token not accepted');
+    // 403 is also the answer when the rate limit is used up: that is not "no access".
+    const rateLimited = response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0';
+    if ((response.status === 403 && !rateLimited) || response.status === 404) {
+        throw Object.assign(new GitHubError('No Actions access'), { noAccess: true });
+    }
+    if (!response.ok) throw new GitHubError(`GitHub error ${response.status}`);
+    const data = await response.json();
     return (data.workflow_runs ?? []).map(run => ({
         sha: run.head_sha,
+        event: run.event,
         status: run.status,
         conclusion: run.conclusion,
         url: run.html_url,

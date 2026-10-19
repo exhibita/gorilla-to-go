@@ -8,7 +8,7 @@ import { getSite } from '../sites.js';
 import { getPageText, recordSavedPage, deviceStore } from '../pages.js';
 import { parseFrontmatter, isDraft } from '../frontmatter.js';
 import { splitPage, composePage, setFields, setImages, setDraft, editedBody } from '../frontmatter-write.js';
-import { watchBuild, buildStatusHtml, rememberCommit } from '../build-status.js';
+import { watchBuild, buildStatusHtml, showBuildStatus, rememberCommit } from '../build-status.js';
 import { classifyPath, listTimeText, TYPE_LABELS } from '../pages-logic.js';
 import { toggleWrap, toggleLinePrefix, insertLink, createHistory } from '../editor-logic.js';
 import { getLocalEdit, saveLocalEdit, deleteLocalEdit } from '../edits.js';
@@ -198,7 +198,7 @@ export async function editorScreen(container, [siteId, path]) {
                 <div class="field-hint">For search engines and the RSS feed.</div>
             </div>
             <label class="switch-row" for="field-draft">
-                <input type="checkbox" id="field-draft" aria-describedby="field-draft-hint">
+                <input type="checkbox" id="field-draft">
                 <span class="switch-text">
                     <span class="switch-title">Draft</span>
                     <span class="field-hint" id="field-draft-hint">The site does not show a draft. It is saved on GitHub.</span>
@@ -836,20 +836,24 @@ export async function editorScreen(container, [siteId, path]) {
     // ----- Publish status (mvp-plan section 6, screen 7) -----
     // After a save, the line under the status follows the site build of the commit until it ends.
     let buildWatch = null;
-    const followBuild = commitSha => {
+    const followBuild = (commitSha, { draft }) => {
         buildWatch?.abort();
+        const line = $('#build-status');
+        line.hidden = true;
+        // The user left the editor during Publish, or the commit is not known: no status line.
+        if (controller.signal.aborted || !commitSha) return false;
         buildWatch = new AbortController();
         const { signal } = buildWatch;
-        const line = $('#build-status');
         watchBuild({
-            list: () => listBuildRuns({ owner: site.owner, repo: site.repo, branch: site.branch, headSha: commitSha ?? undefined, token, signal }),
-            sha: commitSha ?? undefined,
+            list: () => listBuildRuns({ owner: site.owner, repo: site.repo, branch: site.branch, headSha: commitSha, token, signal }),
+            sha: commitSha,
             signal,
             onChange: state => {
-                line.innerHTML = buildStatusHtml(state);
+                showBuildStatus(line, buildStatusHtml(state, { draft }));
                 line.hidden = false;
             }
         });
+        return true;
     };
 
     let publishing = false;
@@ -941,11 +945,11 @@ export async function editorScreen(container, [siteId, path]) {
             // Keep what the user typed during Publish (keepNow deletes the kept copy only when the
             // text is the same as the published text).
             await keepNow();
-            status(asDraft
-                ? `Saved as a draft at ${listTimeText(Date.now())}. The site does not show this page.`
-                : `Published at ${listTimeText(Date.now())}.`);
             rememberCommit(site.id, saved.commitSha); // The Pages list follows this build too.
-            followBuild(saved.commitSha);
+            const following = followBuild(saved.commitSha, { draft: asDraft });
+            status((asDraft
+                ? `Saved as a draft at ${listTimeText(Date.now())}. The site does not show this page.`
+                : `Published at ${listTimeText(Date.now())}.`) + (following ? '' : ' The site updates in a few minutes.'));
         } catch (err) {
             if (err.conflict && isNew) {
                 status('Not published: a page with this address exists on GitHub. Your text is kept on this device.');
