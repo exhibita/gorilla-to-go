@@ -9,7 +9,7 @@ export function aboutSheetHtml() {
         <div class="sheet-body about">
             <img class="about-logo" src="./img/logo.png" alt="" width="63" height="80">
             <h2 class="sheet-title" id="about-title">About Gorilla To Go</h2>
-            <span class="chip">Version ${VERSION}</span>
+            <a class="version-link" href="#/help/changes" data-about-link data-tooltip="See what is new in each version" aria-label="Version ${VERSION}. See what is new."><span class="chip">Version ${VERSION}</span></a>
             <p>Gorilla To Go lets you manage your Vanilla Gorilla sites from your phone. You can add, edit and delete pages.</p>
             <p>The app does not build the site. It commits Markdown files to the GitHub repository of the site. Then the GitHub Actions workflow of the site builds and deploys the site.</p>
             <p class="muted small">License: AGPL-3.0-or-later. Your token stays on this device.</p>

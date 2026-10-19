@@ -48,10 +48,9 @@ class CancelledError extends Error {}
 // caller's signal stops the request.
 async function request(fetch, token, path, { method = 'GET', body, signal, timeoutMs = REQUEST_TIMEOUT_MS, accept = 'application/vnd.github+json' } = {}) {
     if (signal?.aborted) throw new CancelledError();
-    const headers = {
-        Accept: accept,
-        Authorization: authorizationHeader(token)
-    };
+    const headers = { Accept: accept };
+    // No token: a public request (the changelog of the app). Else the token goes only through auth.js.
+    if (token) headers.Authorization = authorizationHeader(token);
     if (body) headers['Content-Type'] = 'application/json';
 
     // One controller for the time limit and the caller's signal (AbortSignal.any is not on older iOS).
@@ -539,6 +538,20 @@ export async function listBuildRuns({ owner, repo, branch, headSha, token, fetch
         createdAt: run.created_at,
         updatedAt: run.updated_at
     }));
+}
+
+// The full changelog of the app (CHANGELOG.md on main), for the "What is new" page when the app is
+// online. The repository is public, so no token goes with this request. Returns the text, or null.
+export async function getChangelog({ fetch = globalThis.fetch, signal, timeoutMs } = {}) {
+    try {
+        const response = await request(fetch, null, '/repos/exhibita/gorilla-to-go/contents/CHANGELOG.md?ref=main', {
+            signal, timeoutMs, accept: 'application/vnd.github.raw+json'
+        });
+        return response.ok ? await response.text() : null;
+    } catch (err) {
+        if (err instanceof CancelledError) throw err;
+        return null;
+    }
 }
 
 const IMAGE_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml' };
