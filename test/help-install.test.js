@@ -18,6 +18,27 @@ test('every image on the install page exists in the app and has alt text and a s
     }
 });
 
+test('the SVG files of the app have no script, link or event attribute', () => {
+    const svgs = [];
+    const walk = dir => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) walk(full);
+            else if (entry.name.endsWith('.svg')) svgs.push(full);
+        }
+    };
+    walk(APP);
+    assert.ok(svgs.length >= 6);
+    for (const file of svgs) {
+        const text = fs.readFileSync(file, 'utf8');
+        assert.doesNotMatch(text, /<script|<foreignObject|\shref=|xlink:href|\son\w+=|<!ENTITY|@import|url\(/i, path.relative(APP, file));
+    }
+});
+
+test('the jump buttons say the phone and the browser, as the section titles do', () => {
+    assert.match(INSTALL_PAGE, /<span>iPhone<\/span> <span class="visually-hidden">with<\/span> <strong>Safari<\/strong>/);
+});
+
 test('every jump button has its section on the page', () => {
     const jumps = [...INSTALL_PAGE.matchAll(/data-jump="([^"]+)"/g)].map(match => match[1]);
     assert.ok(jumps.length >= INSTALL_SECTIONS.length);
@@ -33,6 +54,6 @@ test('the guide in docs and the app page use the same images', () => {
 test('the install page has the section titles of the guide', () => {
     for (const title of [...DOC.matchAll(/^#{2,3} (.+)$/gm)].map(match => match[1])) {
         if (title === 'Find your instructions') continue;
-        assert.ok(INSTALL_PAGE.includes(`>${title}</h`) || INSTALL_PAGE.includes(`>${title.replace(/'/g, "'")}</h`), `missing section: ${title}`);
+        assert.ok(INSTALL_PAGE.includes(`>${title}</h`), `missing section: ${title}`);
     }
 });

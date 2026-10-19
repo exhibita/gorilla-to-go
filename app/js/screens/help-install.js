@@ -35,7 +35,7 @@ export const INSTALL_PAGE = `
 
 <h2>Find your instructions</h2>
 <ul class="install-jumps">
-    ${INSTALL_SECTIONS.map(([id, phone, browser]) => `<li><button type="button" class="install-jump" data-jump="${id}"><span class="install-jump-text"><span>${phone}</span><strong>${browser}</strong></span>${icon('chevronRight', 18)}</button></li>`).join('\n    ')}
+    ${INSTALL_SECTIONS.map(([id, phone, browser]) => `<li><button type="button" class="install-jump" data-jump="${id}"><span class="install-jump-text"><span>${phone}</span> <span class="visually-hidden">with</span> <strong>${browser}</strong></span>${icon('chevronRight', 18)}</button></li>`).join('\n    ')}
 </ul>
 <p>If you do not know which browser you use, use <strong>Safari</strong> on an iPhone. Use <strong>Chrome</strong> on an Android phone.</p>
 
@@ -219,7 +219,7 @@ ${figure('samsung-internet-menu.svg', 360, 378, 'Drawing: Samsung Internet menu.
     <li><strong>Publish often.</strong> A change is safe only after you tap <strong>Publish</strong>. Do not keep large changes on the phone for days.</li>
     <li><strong>Keep free space on your iPhone.</strong> Go to <strong>Settings</strong> &gt; <strong>General</strong> &gt; <strong>iPhone Storage</strong> to see how much space you have.</li>
     <li><strong>Do not clear website data</strong> in Settings unless you must.</li>
-    <li><strong>Know how to make a new token.</strong> A new token takes about 5 minutes. See ${TOKEN_LINK}.</li>
+    <li><strong>Know how to make a new token.</strong> A new token takes about 5 minutes. See ${TOKEN_LINK} in the app.</li>
 </ol>
 
 <h3>If your data is gone</h3>

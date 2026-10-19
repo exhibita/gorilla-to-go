@@ -808,7 +808,8 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* ---------- Install the app (help page and Welcome card) ---------- */
 .prose h3 { margin: 20px 0 6px; font-size: 17px; font-weight: 600; }
-.prose h2[tabindex], .prose h3[tabindex] { scroll-margin-top: 12px; }
+/* Below the sticky top bar after a jump. */
+.prose h2[tabindex], .prose h3[tabindex] { scroll-margin-top: calc(80px + env(safe-area-inset-top)); }
 .prose hr { margin: 28px 0; border: 0; border-top: 1px solid var(--border); }
 .prose a { overflow-wrap: anywhere; }
 .install-figure { margin: 16px 0; }
@@ -817,12 +818,12 @@ button, input, textarea { font: inherit; color: inherit; }
 .install-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .install-pair .install-figure { margin: 0; }
 .install-icon { display: block; width: 96px; height: 96px; border-radius: 22px; }
-.install-jumps { list-style: none; padding: 0 !important; display: flex; flex-direction: column; gap: 8px; }
+.prose .install-jumps { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .install-jumps li { margin: 0; }
 .install-jump { width: 100%; min-height: 56px; padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--text); font: inherit; text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
 .install-jump-text { display: flex; flex-direction: column; }
 .install-jump-text span { color: var(--muted); font-size: 13px; }
-.link-button { min-height: 44px; padding: 0; border: 0; background: none; color: var(--link); font: inherit; text-decoration: underline; cursor: pointer; }
+.link-button { padding: 0; border: 0; background: none; color: var(--link); font: inherit; text-decoration: underline; cursor: pointer; }
 .table-scroll { overflow-x: auto; }
 .prose table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .prose th, .prose td { padding: 8px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
