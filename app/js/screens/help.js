@@ -1,8 +1,10 @@
 // Help pages inside the app, so they work offline (decision 16).
 // Token page: from docs/github-token.md. Upgrade page: from vanilla-gorilla docs/UPGRADE-v2.md.
+// Install page: from docs/install-app.md (help-install.js).
 import { icon } from '../dom.js';
 import { back } from '../router.js';
 import { REQUIRED_TEMPLATE_VERSION } from '../github.js';
+import { INSTALL_PAGE } from './help-install.js';
 
 const TOKEN_PAGE = `
 <p>Gorilla To Go needs a token to change your site on GitHub. A token is like a password that works for one site only.</p>
@@ -104,3 +106,15 @@ function helpScreen(container, title, body) {
 
 export const tokenHelpScreen = container => helpScreen(container, 'Create a GitHub token', TOKEN_PAGE);
 export const upgradeHelpScreen = container => helpScreen(container, 'Upgrade a site', UPGRADE_PAGE);
+
+export function installHelpScreen(container) {
+    helpScreen(container, 'Install the app', INSTALL_PAGE);
+    // A button with data-jump scrolls to its section, and the section gets the focus (for screen readers).
+    for (const button of container.querySelectorAll('[data-jump]')) {
+        button.addEventListener('click', () => {
+            const section = container.querySelector(`#${CSS.escape(button.dataset.jump)}`);
+            section?.scrollIntoView({ block: 'start' });
+            section?.focus({ preventScroll: true });
+        });
+    }
+}

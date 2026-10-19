@@ -87,7 +87,7 @@ Template version 2.1 is done (2026-10-18, vanilla-gorilla#4). The build skips a 
 
 ### Before go-live
 
-- **Install as app:** an "Install as app" link in the app opens a help page inside the PWA (it must work offline, as decision 16 says for the other help pages). The text comes from `docs/install-app.md` and its images from `docs/img/install/`. The user is still editing these files. Keep them out of commits until the user says the guide is ready.
+- **Install as app:** an "Install as app" link in the app opens a help page inside the PWA (it must work offline, as decision 16 says for the other help pages). The text comes from `docs/install-app.md`, and its images are in `app/img/install/`. Done in version 0.10.0: the page is `#/help/install`, the Welcome screen shows "Install the app first" in a browser tab, and the About box links to the page.
 
 ## 9. Risks
 

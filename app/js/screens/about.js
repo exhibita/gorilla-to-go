@@ -15,6 +15,7 @@ export function aboutSheetHtml() {
             <p class="muted small">License: AGPL-3.0-or-later. Your token stays on this device.</p>
             <ul class="about-links">
                 <li><a class="text-link text-link--small" href="https://github.com/exhibita/gorilla-to-go" target="_blank" rel="noopener noreferrer">Source code on GitHub ${icon('external', 14)}</a></li>
+                <li><a class="text-link text-link--small" href="#/help/install" data-about-link>How to install the app</a></li>
                 <li><a class="text-link text-link--small" href="#/help/token" data-about-link>How to create a GitHub token</a></li>
                 <li><a class="text-link text-link--small" href="#/help/upgrade" data-about-link>How to upgrade a site</a></li>
             </ul>
