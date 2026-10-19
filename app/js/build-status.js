@@ -85,17 +85,49 @@ export function showBuildStatus(element, html) {
 }
 
 // The last commit that this device made on each site, so the Pages list follows its build even
-// before GitHub starts the run. Kept in memory only: after an app restart the list shows the newest build.
+// before GitHub starts the run. Kept in memory and in localStorage, so it also works after the phone
+// closes and opens the app again.
 const recentCommits = new Map();
 const RECENT_MS = LIMIT_MS;
+const STORAGE_KEY = siteId => `gtg.recentCommit.${siteId}`;
+const deviceStorage = () => {
+    try {
+        return globalThis.localStorage ?? null;
+    } catch {
+        return null; // For example storage that the browser blocks.
+    }
+};
 
-export function rememberCommit(siteId, sha, now = Date.now()) {
-    if (sha) recentCommits.set(siteId, { sha, at: now });
+export function rememberCommit(siteId, sha, now = Date.now(), storage = deviceStorage()) {
+    if (!sha) return;
+    recentCommits.set(siteId, { sha, at: now });
+    try {
+        storage?.setItem(STORAGE_KEY(siteId), JSON.stringify({ sha, at: now }));
+    } catch {
+        // No storage: the memory copy is enough while the app stays open.
+    }
 }
 
-export function recentCommit(siteId, now = Date.now()) {
-    const recent = recentCommits.get(siteId);
-    return recent && now - recent.at < RECENT_MS ? recent.sha : null;
+// When a site is removed from the app.
+export function forgetCommit(siteId, storage = deviceStorage()) {
+    recentCommits.delete(siteId);
+    try {
+        storage?.removeItem(STORAGE_KEY(siteId));
+    } catch {
+        // No storage: nothing to remove.
+    }
+}
+
+export function recentCommit(siteId, now = Date.now(), storage = deviceStorage()) {
+    let recent = recentCommits.get(siteId);
+    if (!recent) {
+        try {
+            recent = JSON.parse(storage?.getItem(STORAGE_KEY(siteId)) ?? 'null');
+        } catch {
+            recent = null;
+        }
+    }
+    return recent && typeof recent.sha === 'string' && now - recent.at < RECENT_MS ? recent.sha : null;
 }
 
 // Wait ms, or less when the signal stops the wait.

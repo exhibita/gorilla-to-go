@@ -10,7 +10,7 @@ import { parseFrontmatter, isDraft } from '../frontmatter.js';
 import { splitPage, composePage, setFields, setImages, setDraft, editedBody } from '../frontmatter-write.js';
 import { watchBuild, buildStatusHtml, showBuildStatus, rememberCommit } from '../build-status.js';
 import { classifyPath, listTimeText, TYPE_LABELS } from '../pages-logic.js';
-import { toggleWrap, toggleLinePrefix, insertLink, createHistory } from '../editor-logic.js';
+import { toggleWrap, toggleLinePrefix, insertLink, createHistory, continueList } from '../editor-logic.js';
 import { getLocalEdit, saveLocalEdit, deleteLocalEdit } from '../edits.js';
 import { saveFile, pathExists, commitFiles, listFolder, getImageDataUrl, gitBlobSha, base64ToBytes, listBuildRuns } from '../github.js';
 import { imageFolder, imageName, markdownPath, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, galleryItems, galleryImagePath, moveItem } from '../images.js';
@@ -276,11 +276,15 @@ export async function editorScreen(container, [siteId, path]) {
     showTitle();
     let history = createHistory({ text: textarea.value, start: 0, end: 0 });
 
-    if (frontmatterError) {
-        $('#open-details').disabled = true;
-        container.querySelector('[data-mode="photos"]')?.setAttribute('disabled', '');
-        status('The app cannot read the front matter of this page. You can change the text. The front matter stays as it is.');
-    }
+    // Details and Photos change the front matter: they are off when the app cannot read it. Restore can
+    // load another text, so it runs this again.
+    const FRONTMATTER_ERROR_TEXT = 'The app cannot read the front matter of this page. You can change the text. The front matter stays as it is.';
+    const applyFrontmatterState = () => {
+        $('#open-details').disabled = Boolean(frontmatterError);
+        container.querySelector('[data-mode="photos"]')?.toggleAttribute('disabled', Boolean(frontmatterError));
+    };
+    applyFrontmatterState();
+    if (frontmatterError) status(FRONTMATTER_ERROR_TEXT);
     if (isNew) status('This page is not published yet. It is kept on this device until you tap Publish.');
 
     // ----- Delete a new page (only on this device) -----
@@ -354,9 +358,12 @@ export async function editorScreen(container, [siteId, path]) {
             textarea.value = parts.body;
             showTitle();
             history = createHistory({ text: textarea.value, start: 0, end: 0 });
+            applyFrontmatterState();
+            // The Photos view is off for front matter that the app cannot read: show the text.
+            if (frontmatterError && photos && !photos.hidden) container.querySelector('[data-mode="write"]').click();
             if (photos && !photos.hidden) renderPhotos();
             banner.hidden = true;
-            status(`Restored the changes from ${listTimeText(local.savedAt)}.`);
+            status(`Restored the changes from ${listTimeText(local.savedAt)}.${frontmatterError ? ` ${FRONTMATTER_ERROR_TEXT}` : ''}`);
         });
         $('#discard').addEventListener('click', async () => {
             restorePending = false;
@@ -370,7 +377,28 @@ export async function editorScreen(container, [siteId, path]) {
     // ----- Typing and the toolbar -----
     let historyTimer = null;
     const remember = () => history.push({ text: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd });
-    textarea.addEventListener('input', () => {
+    // The text before each change, to find an Enter that a phone keyboard reports with another inputType.
+    let valueBefore = null;
+    textarea.addEventListener('beforeinput', () => {
+        valueBefore = textarea.value;
+    });
+    textarea.addEventListener('input', event => {
+        // Enter in a list or a quote: start the next item, or end the list on an empty item. The
+        // change goes in with setRangeText, so the phone keyboard and the cursor stay.
+        const before = valueBefore;
+        valueBefore = null;
+        const cursor = textarea.selectionStart;
+        const value = textarea.value;
+        const oneLineBreak = before !== null && value.length === before.length + 1 && value[cursor - 1] === '\n' &&
+            value.slice(0, cursor - 1) + value.slice(cursor) === before;
+        const lineBreak = oneLineBreak || event.inputType === 'insertLineBreak' || event.inputType === 'insertParagraph';
+        if (lineBreak && !event.isComposing) {
+            const next = continueList({ text: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd });
+            if (next) {
+                textarea.setRangeText(next.edit.insert, next.edit.from, next.edit.to, 'end');
+                textarea.setSelectionRange(next.start, next.end); // After an ended list: below the blank line.
+            }
+        }
         clearTimeout(historyTimer);
         historyTimer = setTimeout(remember, HISTORY_DELAY_MS);
         keepSoon();

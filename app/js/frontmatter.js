@@ -26,8 +26,9 @@ export function isDraft(data) {
     return value === true || String(value).toLowerCase() === 'true';
 }
 
-const KEY_LINE = /^([A-Za-z0-9_][\w-]*)[ \t]*:(?:[ \t]+(.*)|[ \t]*)$/;
-const ITEM_LINE = /^([ \t]*)-(?:[ \t]+(.*)|[ \t]*)$/;
+// The s flag: "." also matches U+2028 and U+2029, which a value can hold (lines are split at \n only).
+const KEY_LINE = /^([A-Za-z0-9_][\w-]*)[ \t]*:(?:[ \t]+(.*)|[ \t]*)$/s;
+const ITEM_LINE = /^([ \t]*)-(?:[ \t]+(.*)|[ \t]*)$/s;
 const BLOCK = /^([|>])[+-]?(?:[ \t]+#.*)?$/;
 
 const indentOf = line => line.match(/^[ \t]*/)[0].length;
@@ -171,7 +172,7 @@ function parseScalar(value, lineNumber) {
     }
     if (/^[[{]/.test(value)) throw new Error(`Line ${lineNumber}: the app cannot read [ ] or { } values.`);
 
-    const plain = value.replace(/[ \t]+#.*$/, '').trim();
+    const plain = value.replace(/[ \t]+#.*$/s, '').trim();
     // The site build (gray-matter) refuses these plain values, or the app cannot read them (anchors),
     // so the app must not show the page as normal.
     if (/^[*&!@`%|>]|^[-?](\s|$)/.test(plain)) {

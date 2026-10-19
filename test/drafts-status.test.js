@@ -4,7 +4,7 @@ import { setDraft } from '../app/js/frontmatter-write.js';
 import { parseFrontmatter, isDraft } from '../app/js/frontmatter.js';
 import { filterPages } from '../app/js/pages-logic.js';
 import { listBuildRuns, saveFile, deleteFile } from '../app/js/github.js';
-import { buildState, buildStatusText, buildStatusHtml, showBuildStatus, watchBuild, rememberCommit, recentCommit } from '../app/js/build-status.js';
+import { buildState, buildStatusText, buildStatusHtml, showBuildStatus, watchBuild, rememberCommit, recentCommit, forgetCommit } from '../app/js/build-status.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -136,6 +136,25 @@ test('rememberCommit keeps the last commit of a site for 20 minutes', () => {
     assert.equal(recentCommit('other', 1000), null);
     rememberCommit('s1', null, 5000);
     assert.equal(recentCommit('s1', 5000), 'C9', 'no SHA: no change');
+});
+
+test('recentCommit also comes from the device storage, for example after an app restart', () => {
+    const saved = new Map();
+    const storage = { setItem: (k, v) => saved.set(k, v), getItem: k => saved.get(k) ?? null };
+    rememberCommit('site-r', 'C7', 1000, storage);
+    assert.ok(saved.has('gtg.recentCommit.site-r'));
+    // A new app start: the memory copy is gone, the storage copy is there.
+    const afterRestart = { getItem: k => saved.get(k) ?? null };
+    assert.equal(recentCommit('site-x', 2000, afterRestart), null);
+    saved.set('gtg.recentCommit.site-x', JSON.stringify({ sha: 'C8', at: 1000 }));
+    assert.equal(recentCommit('site-x', 2000, afterRestart), 'C8');
+    assert.equal(recentCommit('site-x', 1000 + 21 * 60 * 1000, afterRestart), null, 'too old');
+    saved.set('gtg.recentCommit.site-y', 'not json');
+    assert.equal(recentCommit('site-y', 2000, afterRestart), null);
+    assert.equal(recentCommit('site-z', 2000, { getItem: () => { throw new Error('blocked'); } }), null);
+    forgetCommit('site-r', { removeItem: k => saved.delete(k) });
+    assert.equal(saved.has('gtg.recentCommit.site-r'), false, 'Remove site forgets it');
+    assert.equal(recentCommit('site-r', 1500, { getItem: () => null }), null);
 });
 
 // ---------- watchBuild ----------
