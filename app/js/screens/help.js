@@ -1,10 +1,16 @@
 // Help pages inside the app, so they work offline (decision 16).
 // Token page: from docs/github-token.md. Upgrade page: from vanilla-gorilla docs/UPGRADE-v2.md.
 // Install page: from docs/install-app.md (help-install.js).
+// What is new: CHANGELOG.md. All versions from GitHub when online; the last 3 (in the app) when offline.
+import { marked } from '../../vendor/marked/marked.esm.js';
 import { icon } from '../dom.js';
 import { back } from '../router.js';
-import { REQUIRED_TEMPLATE_VERSION } from '../github.js';
+import { REQUIRED_TEMPLATE_VERSION, getChangelog } from '../github.js';
+import { sanitizeHtml } from '../sanitize.js';
+import { latestEntries } from '../changelog.js';
+import { RECENT_CHANGES } from '../changelog-recent.js';
 import { INSTALL_PAGE } from './help-install.js';
+import { VERSION } from '../version.js';
 
 const TOKEN_PAGE = `
 <p>Gorilla To Go needs a token to change your site on GitHub. A token is like a password that works for one site only.</p>
@@ -126,4 +132,33 @@ export function installHelpScreen(container) {
             section?.focus({ preventScroll: true });
         });
     }
+}
+
+// The changelog as safe HTML (the same renderer and sanitizer as the editor Preview).
+const changesHtml = markdown => sanitizeHtml(marked.parse(markdown));
+
+// What is new (CHANGELOG.md): the last 3 versions show at once (they are in the app, so they work
+// offline). When GitHub answers, all versions replace them.
+export function changesHelpScreen(container) {
+    helpScreen(container, 'What is new', `
+        <p class="muted small" id="changes-note" aria-live="polite">Looking for all versions.</p>
+        <div id="changes"></div>`);
+    const note = container.querySelector('#changes-note');
+    const list = container.querySelector('#changes');
+    list.replaceChildren(changesHtml(RECENT_CHANGES));
+
+    const controller = new AbortController();
+    getChangelog({ signal: controller.signal }).then(full => {
+        if (controller.signal.aborted) return;
+        const entries = full ? latestEntries(full, Infinity) : '';
+        if (entries) {
+            list.replaceChildren(changesHtml(entries));
+            note.textContent = `All versions of Gorilla To Go, newest first. You use version ${VERSION}.`;
+        } else {
+            note.textContent = navigator.onLine === false
+                ? 'You are offline, so the app shows the last 3 versions. Connect to the internet to see all versions.'
+                : 'The app cannot read all versions now, so it shows the last 3 versions. Try again later.';
+        }
+    }).catch(() => {}); // Cancelled: the user left the page.
+    return () => controller.abort();
 }

@@ -829,3 +829,30 @@ button, input, textarea { font: inherit; color: inherit; }
 .prose th, .prose td { padding: 8px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
 .prose th { background: var(--bg-2); font-weight: 600; }
 .install-card p { margin: 0; }
+
+/* ---------- Version link in the About box: opens What is new, with a tooltip ---------- */
+.version-link { position: relative; display: inline-flex; align-items: center; min-height: 44px; color: inherit; text-decoration: none; }
+.version-link .chip { cursor: pointer; transition: background 0.15s, color 0.15s; }
+.version-link:hover .chip, .version-link:focus-visible .chip { background: var(--ok-bg); color: var(--ok-text); }
+.version-link:focus-visible { outline: none; }
+.version-link:focus-visible .chip { outline: 3px solid var(--primary); outline-offset: 2px; }
+.version-link::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% - 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--text);
+    color: var(--bg);
+    font-size: 13px;
+    white-space: nowrap;
+    z-index: 1;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+}
+.version-link:hover::after, .version-link:focus-visible::after { opacity: 1; }
+@media (hover: none) { .version-link::after { display: none; } }
