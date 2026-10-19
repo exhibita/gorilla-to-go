@@ -4,6 +4,7 @@ import { saveToken, deleteToken } from './auth.js';
 import { findDuplicate } from './sites-logic.js';
 import { deviceStore } from './pages.js';
 import { deleteSiteEdits } from './edits.js';
+import { forgetCommit } from './build-status.js';
 
 const LAST_SITE_KEY = 'gtg.lastSite';
 
@@ -46,6 +47,7 @@ export async function removeSite(id) {
     await deleteToken(id);
     await db.remove('sites', id);
     if (getLastSiteId() === id) setLastSiteId(null);
+    forgetCommit(id);
     // The saved page list and page texts of the site. A failure here does not stop the removal.
     try {
         await deviceStore.deletePageList(id);

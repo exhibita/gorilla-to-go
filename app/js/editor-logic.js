@@ -79,42 +79,68 @@ export function createHistory(initial) {
     };
 }
 
+// True when the line that starts at lineStart is inside a fenced code block. CommonMark: a fence
+// opens with at most 3 spaces and ``` or ~~~; it closes with the same character, as long or longer,
+// and no other text.
+function insideFence(text, lineStart) {
+    let open = null;
+    for (const line of text.slice(0, lineStart).split('\n')) {
+        const fence = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+        if (!fence) continue;
+        if (!open) {
+            if (!(fence[1][0] === '`' && fence[2].includes('`'))) open = fence[1];
+        } else if (fence[1][0] === open[0] && fence[1].length >= open.length && fence[2].trim() === '') {
+            open = null;
+        }
+    }
+    return open !== null;
+}
+
+// True when the line before lineStart is paragraph text (not blank, not indented, not a list item,
+// a quote or a heading). CommonMark: there, only a numbered list that starts at 1 begins a list.
+function afterParagraph(text, lineStart) {
+    if (lineStart === 0) return false;
+    const before = text.slice(text.lastIndexOf('\n', lineStart - 2) + 1, lineStart - 1);
+    return before.trim() !== '' && !/^(\s|[-*+]\s|\d{1,9}[.)]\s|>|#)/.test(before);
+}
+
 // After Enter (the cursor is just after the new line break): continue the list or the quote of the
-// line before. "- a" gives "- ", "3. a" gives "4. ", "- [x] a" gives "- [ ] ", "> a" gives "> ".
-// Enter on an empty item ends the list: the marker goes away. Returns { text, start, end, edit }
+// line before. "- a" gives "- ", "3. a" gives "4. ", "- [x] a" gives "- [ ] ", "> a" gives "> ",
+// "> - a" gives "> - ". Enter on an empty item ends the list: the marker goes away, and the line
+// stays blank, so the next paragraph is not part of the list. Returns { text, start, end, edit }
 // (edit: { from, to, insert } for the textarea), or null when there is nothing to do.
 export function continueList({ text, start, end }) {
     if (start !== end || text[start - 1] !== '\n') return null;
     const lineStart = text.lastIndexOf('\n', start - 2) + 1;
     const line = text.slice(lineStart, start - 1);
-
-    // Not in a fenced code block: count the fence lines before this line.
-    const fences = text.slice(0, lineStart).split('\n').filter(before => /^\s*(```|~~~)/.test(before)).length;
-    if (fences % 2 === 1) return null;
+    if (insideFence(text, lineStart)) return null;
     // A rule (* * *, - - -) is not a list item.
     if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) return null;
 
-    let marker;
-    let content;
+    // A quote prefix ("> ", ">> "), then maybe a list item in the quote.
+    const quote = line.match(/^\s*(?:>[ \t]?)+/)?.[0] ?? '';
+    const rest = line.slice(quote.length);
+    let marker = quote ? `${quote.trimEnd()} ` : '';
+    let content = rest;
     let match;
-    if ((match = line.match(/^(\s*)([-*+])(\s+)(\[[ xX]\]\s+)?(.*)$/))) {
-        marker = `${match[1]}${match[2]}${match[3]}${match[4] ? '[ ] ' : ''}`;
+    if ((match = rest.match(/^(\s*)([-*+])(\s+)(\[[ xX]\](?:\s+|$))?(.*)$/))) {
+        marker += `${match[1]}${match[2]}${match[3]}${match[4] ? '[ ] ' : ''}`;
         content = match[5];
-    } else if ((match = line.match(/^(\s*)(\d{1,9})([.)])(\s+)(.*)$/))) {
-        marker = `${match[1]}${Number(match[2]) + 1}${match[3]}${match[4]}`;
+    } else if ((match = rest.match(/^(\s*)(\d{1,9})([.)])(\s+)(.*)$/))) {
+        const number = Number(match[2]);
+        if (number !== 1 && !quote && afterParagraph(text, lineStart)) return null; // "1999. was a year"
+        marker += `${match[1]}${String(number + 1).padStart(match[2].length, '0')}${match[3]}${match[4]}`;
         content = match[5];
-    } else if ((match = line.match(/^(\s*)>\s?(.*)$/))) {
-        marker = `${match[1]}> `;
-        content = match[2];
-    } else {
+    } else if (!quote) {
         return null;
     }
 
     const nextBreak = text.indexOf('\n', start);
-    const rest = text.slice(start, nextBreak === -1 ? text.length : nextBreak);
-    if (content.trim() === '' && rest.trim() === '') {
-        // An empty item: end the list. The line of the item becomes empty, and the cursor stays on it.
-        return { text: text.slice(0, lineStart) + text.slice(start), start: lineStart, end: lineStart, edit: { from: lineStart, to: start, insert: '' } };
+    const after = text.slice(start, nextBreak === -1 ? text.length : nextBreak);
+    if (content.trim() === '' && after.trim() === '') {
+        // An empty item: remove its marker. The line break that the user typed stays.
+        const cursor = lineStart + 1;
+        return { text: text.slice(0, lineStart) + text.slice(start - 1), start: cursor, end: cursor, edit: { from: lineStart, to: start - 1, insert: '' } };
     }
     const cursor = start + marker.length;
     return { text: text.slice(0, start) + marker + text.slice(start), start: cursor, end: cursor, edit: { from: start, to: start, insert: marker } };

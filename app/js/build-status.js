@@ -108,6 +108,16 @@ export function rememberCommit(siteId, sha, now = Date.now(), storage = deviceSt
     }
 }
 
+// When a site is removed from the app.
+export function forgetCommit(siteId, storage = deviceStorage()) {
+    recentCommits.delete(siteId);
+    try {
+        storage?.removeItem(STORAGE_KEY(siteId));
+    } catch {
+        // No storage: nothing to remove.
+    }
+}
+
 export function recentCommit(siteId, now = Date.now(), storage = deviceStorage()) {
     let recent = recentCommits.get(siteId);
     if (!recent) {

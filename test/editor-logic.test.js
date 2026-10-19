@@ -102,11 +102,33 @@ test('continueList continues a quote', () => {
     assert.equal(result(continueList(afterEnter('> A quote\n|'))), '> A quote\n> |');
 });
 
-test('continueList ends the list when the item is empty', () => {
-    assert.equal(result(continueList(afterEnter('- one\n- \n|'))), '- one\n|');
-    assert.equal(result(continueList(afterEnter('- one\n- \n|\nNext'))), '- one\n|\nNext');
-    assert.equal(result(continueList(afterEnter('1. one\n2. \n|'))), '1. one\n|');
-    assert.equal(result(continueList(afterEnter('> \n|'))), '|');
+test('continueList ends the list when the item is empty, and keeps the blank line', () => {
+    assert.equal(result(continueList(afterEnter('- one\n- \n|'))), '- one\n\n|');
+    assert.equal(result(continueList(afterEnter('- one\n- \n|\nNext'))), '- one\n\n|\nNext');
+    assert.equal(result(continueList(afterEnter('1. one\n2. \n|'))), '1. one\n\n|');
+    assert.equal(result(continueList(afterEnter('> \n|'))), '\n|');
+    assert.equal(result(continueList(afterEnter('- [ ]\n|'))), '\n|', 'an empty task without a space');
+});
+
+const FENCE = '```';
+
+test('continueList knows fenced code blocks as CommonMark does', () => {
+    assert.equal(result(continueList(afterEnter(`${FENCE}\n~~~\n${FENCE}\n- a\n|`))), `${FENCE}\n~~~\n${FENCE}\n- a\n- |`, '~~~ in a backtick block does not close it');
+    assert.equal(result(continueList(afterEnter(`    ${FENCE}\n- a\n|`))), `    ${FENCE}\n- a\n- |`, 'an indented line is not a fence');
+    assert.equal(continueList(afterEnter(`${FENCE}\`\n${FENCE}\n- code\n|`)), null, 'a shorter fence does not close a longer one');
+    assert.equal(continueList(afterEnter('~~~js\n- code\n|')), null);
+});
+
+test('continueList: leading zeros, nested quotes, a list in a quote', () => {
+    assert.equal(result(continueList(afterEnter('007. seven\n|'))), '007. seven\n008. |');
+    assert.equal(result(continueList(afterEnter('>> deep\n|'))), '>> deep\n>> |');
+    assert.equal(result(continueList(afterEnter('> - item\n|'))), '> - item\n> - |');
+});
+
+test('continueList: a number after a paragraph line is not a list unless it is 1', () => {
+    assert.equal(continueList(afterEnter('Text\n1999. was a year\n|')), null);
+    assert.equal(result(continueList(afterEnter('Text\n1. one\n|'))), 'Text\n1. one\n2. |');
+    assert.equal(result(continueList(afterEnter('1. one\n2. two\n|'))), '1. one\n2. two\n3. |');
 });
 
 test('continueList splits an item: the text after the cursor becomes the next item', () => {
@@ -127,5 +149,5 @@ test('continueList does nothing outside a list, in a code block, on a rule, or w
 
 test('continueList gives the edit for the textarea', () => {
     assert.deepEqual(continueList(afterEnter('- one\n|')).edit, { from: 6, to: 6, insert: '- ' });
-    assert.deepEqual(continueList(afterEnter('- one\n- \n|')).edit, { from: 6, to: 9, insert: '' });
+    assert.deepEqual(continueList(afterEnter('- one\n- \n|')).edit, { from: 6, to: 8, insert: '' });
 });

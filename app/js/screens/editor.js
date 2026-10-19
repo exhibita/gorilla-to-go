@@ -377,14 +377,27 @@ export async function editorScreen(container, [siteId, path]) {
     // ----- Typing and the toolbar -----
     let historyTimer = null;
     const remember = () => history.push({ text: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd });
+    // The text before each change, to find an Enter that a phone keyboard reports with another inputType.
+    let valueBefore = null;
+    textarea.addEventListener('beforeinput', () => {
+        valueBefore = textarea.value;
+    });
     textarea.addEventListener('input', event => {
         // Enter in a list or a quote: start the next item, or end the list on an empty item. The
         // change goes in with setRangeText, so the phone keyboard and the cursor stay.
-        const lineBreak = event.inputType === 'insertLineBreak' || event.inputType === 'insertParagraph' ||
-            (event.inputType === 'insertText' && event.data === '\n');
+        const before = valueBefore;
+        valueBefore = null;
+        const cursor = textarea.selectionStart;
+        const value = textarea.value;
+        const oneLineBreak = before !== null && value.length === before.length + 1 && value[cursor - 1] === '\n' &&
+            value.slice(0, cursor - 1) + value.slice(cursor) === before;
+        const lineBreak = oneLineBreak || event.inputType === 'insertLineBreak' || event.inputType === 'insertParagraph';
         if (lineBreak && !event.isComposing) {
             const next = continueList({ text: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd });
-            if (next) textarea.setRangeText(next.edit.insert, next.edit.from, next.edit.to, 'end');
+            if (next) {
+                textarea.setRangeText(next.edit.insert, next.edit.from, next.edit.to, 'end');
+                textarea.setSelectionRange(next.start, next.end); // After an ended list: below the blank line.
+            }
         }
         clearTimeout(historyTimer);
         historyTimer = setTimeout(remember, HISTORY_DELAY_MS);
