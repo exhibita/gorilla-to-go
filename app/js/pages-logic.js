@@ -47,11 +47,12 @@ export function sortPages(pages) {
     });
 }
 
-// type: 'all', 'blog', 'page' or 'gallery'. query: text to find in the title or the slug.
+// type: 'all', 'blog', 'page', 'gallery' or 'draft' (the drafts of all types). query: text to find
+// in the title or the slug.
 export function filterPages(pages, { type = 'all', query = '' } = {}) {
     const text = query.trim().toLowerCase();
     return pages.filter(page =>
-        (type === 'all' || page.type === type) &&
+        (type === 'all' || page.type === type || (type === 'draft' && page.draft)) &&
         (!text || page.title.toLowerCase().includes(text) || page.slug.toLowerCase().includes(text)));
 }
 

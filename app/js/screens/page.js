@@ -9,6 +9,7 @@ import { escapeHtml, icon } from '../dom.js';
 import { back, navigate } from '../router.js';
 import { pageMetaHtml, forgetList } from './site.js';
 import { deleteFile } from '../github.js';
+import { rememberCommit } from '../build-status.js';
 
 // Delete the page (mvp-plan section 5): confirmation first, then one commit with the SHA the user
 // opened, so a page that changed on GitHub is not deleted.
@@ -40,7 +41,7 @@ function bindDelete({ container, site, path, entry, slug, token, siteHref }) {
         $('#delete-status').textContent = 'Deleting. Keep the app open until this is complete.';
         window.addEventListener('beforeunload', warnBeforeClose);
         try {
-            await deleteFile({
+            const deleted = await deleteFile({
                 owner: site.owner,
                 repo: site.repo,
                 branch: site.branch,
@@ -49,6 +50,7 @@ function bindDelete({ container, site, path, entry, slug, token, siteHref }) {
                 message: `Delete ${slug} with Gorilla To Go`,
                 token
             });
+            rememberCommit(site.id, deleted?.commitSha); // The Pages list follows the build of the delete.
             await recordDeletedPage({ site, path }).catch(() => {});
             await deleteLocalEdit(site.id, path).catch(() => {});
             forgetList(site.id);

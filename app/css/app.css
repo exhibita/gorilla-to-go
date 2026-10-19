@@ -791,3 +791,17 @@ button, input, textarea { font: inherit; color: inherit; }
 .preview-gallery figure { margin: 0; }
 .preview-gallery figcaption { margin-top: 4px; color: var(--muted); font-size: 13px; }
 .editor-preview .preview-gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; margin: 0; }
+
+/* ---------- Drafts and publish status (step 9) ---------- */
+.build-status { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; color: var(--muted); font-size: 13px; }
+.build-status--editor { padding: 0 20px 6px; }
+.build-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; background: var(--bg-2); color: var(--text); font-size: 12px; font-weight: 600; }
+.build-chip--live { background: var(--ok-bg); color: var(--ok-text); }
+.build-chip--failed { background: var(--fail-bg); color: var(--fail-text); }
+.build-chip--publishing, .build-chip--waiting, .build-chip--tooLong { background: var(--page-bg); color: var(--page-text); }
+.spinner--small { width: 10px; height: 10px; }
+.text-link--inline { min-height: 44px; font-size: 13px; text-decoration: underline; }
+.switch-row { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; padding: 6px 0; cursor: pointer; }
+.switch-row input { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--primary); flex: none; }
+.switch-text { display: flex; flex-direction: column; gap: 2px; }
+.switch-title { font-weight: 600; }

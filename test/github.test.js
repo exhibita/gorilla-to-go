@@ -305,7 +305,7 @@ test('saveFile sends the text, the old SHA and the branch, and returns the new S
     };
     const text = '---\ntitle: "Café ✓"\n---\nBody\n';
     const result = await saveFile({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path: 'src/blog/my post/index.md', text, sha: 'OLDSHA', message: 'Edit', token: TOKEN, fetch });
-    assert.deepEqual(result, { sha: 'NEWSHA' });
+    assert.deepEqual(result, { sha: 'NEWSHA', commitSha: 'COMMIT' });
     assert.equal(sent[0].method, 'PUT');
     assert.equal(sent[0].url, `${API}${REPO}/contents/src/blog/my%20post/index.md`);
     assert.equal(sent[0].auth, `Bearer ${TOKEN}`);
