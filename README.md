@@ -29,6 +29,18 @@ To test on a phone, the app needs HTTPS:
 
 Only the `app/` folder is published. GitHub Pages hosts it at https://gorillatogo.app. See [docs/hosting.md](docs/hosting.md).
 
+## Release a new version
+
+Each release has a new version number and a changelog entry.
+
+1. Change the version in `package.json`, `app/js/version.js` and `app/sw.js` (`VERSION`). The three must be the same.
+2. Add an entry at the top of [CHANGELOG.md](CHANGELOG.md): `## <version> — <YYYY-MM-DD>`, then short items for the user.
+3. Run `npm run changelog`.
+4. Run `npm test`.
+5. Commit `CHANGELOG.md` and `app/js/changelog-recent.js` together.
+
+> **Reminder:** do step 3 each time you change `CHANGELOG.md` by hand, also for a small fix in an older entry. The script copies the last 3 entries into `app/js/changelog-recent.js`. The app shows that copy on the "What is new" page when the phone is offline. Nothing runs the script automatically. If you forget it, `npm test` fails, and the GitHub Actions deploy stops before it publishes the app.
+
 ## Documents
 
 | File | Contents |
