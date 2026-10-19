@@ -2,7 +2,7 @@
 // GitHub API requests always go to the network and are never cached.
 // When you add, rename or remove a file in app/, update ASSETS (a test checks this).
 // When you release a new version, VERSION changes with app/js/version.js (a test checks this).
-const VERSION = '0.9.0';
+const VERSION = '0.10.0';
 const CACHE = `gtg-${VERSION}`;
 
 const ASSETS = [
@@ -21,6 +21,15 @@ const ASSETS = [
     'img/icon-192.png',
     'img/icon-512.png',
     'img/icon-maskable-512.png',
+    'img/install/android-chrome-install.svg',
+    'img/install/android-chrome-menu.svg',
+    'img/install/gtg-icon.png',
+    'img/install/gtg-welcome-dark.jpg',
+    'img/install/gtg-welcome-light.jpg',
+    'img/install/ios-add-to-home-screen.svg',
+    'img/install/ios-other-browsers.svg',
+    'img/install/ios-safari-share.svg',
+    'img/install/samsung-internet-menu.svg',
     'img/logo.png',
     'js/app.js',
     'js/auth.js',
@@ -43,6 +52,7 @@ const ASSETS = [
     'js/screens/about.js',
     'js/screens/add-site.js',
     'js/screens/editor.js',
+    'js/screens/help-install.js',
     'js/screens/help.js',
     'js/screens/new-page.js',
     'js/screens/page.js',

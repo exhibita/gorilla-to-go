@@ -51,11 +51,16 @@ test('no inline scripts or style attributes in the app (the CSP blocks them)', (
 
 test('the app loads no third-party resources', () => {
     for (const file of appFiles().filter(f => /\.(html|js|css|webmanifest)$/.test(f))) {
-        const text = fs.readFileSync(path.join(APP, file), 'utf8');
-        const urls = text.match(/https?:\/\/[^\s'"`)]+/g) || [];
+        // Links that the user taps (href="…", and the external('…') links of the install page) load
+        // nothing. Everything else (src, url(), fetch) must stay on GitHub or in the app.
+        const text = fs.readFileSync(path.join(APP, file), 'utf8')
+            .replace(/href="https:\/\/[^"]+"/g, '')
+            .replace(/external\('https:\/\/[^']+'/g, '');
+        const urls = text.match(/https?:\/\/[^\s'"`)<]+/g) || [];
         for (const url of urls) {
             assert.ok(
-                url.startsWith('https://api.github.com') || url.startsWith('https://github.com') || url.startsWith('http://www.w3.org/'),
+                url.startsWith('https://api.github.com') || url.startsWith('https://github.com') || url.startsWith('http://www.w3.org/') ||
+                url === 'https://gorillatogo.app',
                 `${file} references ${url}`
             );
         }
