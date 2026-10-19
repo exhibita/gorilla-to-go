@@ -102,6 +102,17 @@ export async function getTemplateVersion({ owner, repo, branch, token, fetch = g
     }
 }
 
+// True when the account is an organization (public data). False when it is a person or cannot be read.
+async function isOrganization(fetch, token, owner, net) {
+    try {
+        const response = await request(fetch, token, `/users/${encodeURIComponent(owner)}`, net);
+        return response.ok && (await response.json()).type === 'Organization';
+    } catch (err) {
+        if (err instanceof CancelledError) throw err;
+        return false;
+    }
+}
+
 // Run the Add a site checks in order. The first failure stops the run.
 // onUpdate(results) is called after each change. Returns { ok, templateVersion, results }, with
 // cancelled: true when the signal stopped the run.
@@ -133,7 +144,15 @@ export async function checkSite({ owner, repo, branch, token, fetch = globalThis
         set('token', 'pass');
 
         set('repo', 'running');
-        if (repoResponse.status === 404) return fail('repo', 'Repository not found');
+        if (repoResponse.status === 404) {
+            // GitHub also says "not found" when the token cannot see a private repository. For a repository
+            // of an organization, the usual cause is the token's resource owner or a token that the
+            // organization did not approve: say so.
+            const ownerIsOrganization = await isOrganization(fetch, token, owner, net);
+            return fail('repo', ownerIsOrganization
+                ? `Repository not found. ${owner} is an organization: the Resource owner of the token must be ${owner}, and the organization must allow and approve the token.`
+                : 'Repository not found');
+        }
         // Write access: a fine-grained token's grants cannot be read from the API, so try to create a
         // branch that points to an all-zero SHA. With write access GitHub refuses the SHA (422) and
         // creates nothing. Without write access GitHub refuses the request (403 or 404).

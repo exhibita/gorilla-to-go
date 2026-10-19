@@ -62,8 +62,17 @@ const TOKEN_PAGE = `
     <li><strong>"Repository not found":</strong> make sure you selected the site's repository in step 12.</li>
     <li><strong>"No write access":</strong> make sure <strong>Contents</strong> is set to <strong>Read and write</strong> in step 14.</li>
     <li><strong>"No Actions access":</strong> make sure <strong>Actions</strong> is set to <strong>Read-only</strong> in step 15.</li>
-    <li><strong>The site belongs to an organization:</strong> the organization owner may need to approve the token first.</li>
+    <li><strong>The site belongs to an organization:</strong> see the next section.</li>
 </ul>
+
+<h2>If the site belongs to an organization</h2>
+<p>GitHub says "Repository not found" when the token cannot see the repository. For an organization, check these items:</p>
+<ol>
+    <li>You are a member of the organization, with write access to the repository. An outside collaborator cannot make a token for an organization.</li>
+    <li>In step 10, <strong>Resource owner</strong> is the organization, not your own account. If the organization is not in the list, the organization does not allow fine-grained tokens. Ask an organization owner to allow them.</li>
+    <li>The organization approved the token. An organization owner opens the organization's <strong>Settings</strong>, then <strong>Personal access tokens</strong>, then <strong>Pending requests</strong>, and approves the token.</li>
+</ol>
+<p>Organization owners set the rules in the organization's <strong>Settings</strong> &gt; <strong>Personal access tokens</strong> &gt; <strong>Settings</strong>: allow fine-grained tokens, and choose if each token needs approval.</p>
 <p>Note: GitHub sometimes changes the names and places of these settings. If a step does not match, look for <strong>Fine-grained tokens</strong> in <strong>Developer settings</strong>.</p>`;
 
 const UPGRADE_PAGE = `

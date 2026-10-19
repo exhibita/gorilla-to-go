@@ -122,6 +122,31 @@ test('an unknown repository fails with "Repository not found"', async () => {
     assert.equal(result.results[1].label, 'Repository not found');
 });
 
+test('"Repository not found" for an organization says what to check on the token', async () => {
+    const routes = {
+        ...goodRoutes(),
+        [`GET ${REPO}`]: () => json(404, { message: 'Not Found' }),
+        'GET /users/exhibita': () => json(200, { login: 'exhibita', type: 'Organization' })
+    };
+    const result = await run(routes);
+    assert.deepEqual(statuses(result).slice(0, 2), ['token:pass', 'repo:fail']);
+    assert.equal(
+        result.results[1].label,
+        'Repository not found. exhibita is an organization: the Resource owner of the token must be exhibita, and the organization must allow and approve the token.'
+    );
+});
+
+test('"Repository not found" for a person, or when the owner cannot be read, stays short', async () => {
+    const personal = {
+        ...goodRoutes(),
+        [`GET ${REPO}`]: () => json(404, {}),
+        'GET /users/exhibita': () => json(200, { login: 'exhibita', type: 'User' })
+    };
+    assert.equal((await run(personal)).results[1].label, 'Repository not found');
+    const unknownOwner = { ...goodRoutes(), [`GET ${REPO}`]: () => json(404, {}), 'GET /users/exhibita': () => json(404, {}) };
+    assert.equal((await run(unknownOwner)).results[1].label, 'Repository not found');
+});
+
 test('a token without Contents write permission fails with "No write access"', async () => {
     for (const status of [403, 404]) {
         const routes = { ...goodRoutes(), [`POST ${REPO}/git/refs`]: () => json(status, { message: 'Resource not accessible by personal access token' }) };
