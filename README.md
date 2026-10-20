@@ -50,5 +50,5 @@ Each release has a new version number and a changelog entry.
 | [docs/design.md](docs/design.md) | Themes, colors, typography and screen designs |
 | [docs/vanilla-gorilla-notes.md](docs/vanilla-gorilla-notes.md) | How Vanilla Gorilla works, and what GTG depends on |
 | [docs/hosting.md](docs/hosting.md) | How GitHub Pages hosts GTG, and how to set up the domain |
-| [docs/future.md](docs/future.md) | Features for versions after the MVP |
+| [docs/future.md](docs/future.md) | Where future work is tracked (GitHub issues), and the labels |
 | [docs/name-research.md](docs/name-research.md) | Name candidates and the name checks |
