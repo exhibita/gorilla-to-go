@@ -1,0 +1,12 @@
+# Dependabot opens a pull request when a newer version is out. For the actions, it moves the pinned
+# commit SHA in .github/workflows/pages.yml and updates the "# vN.N.N" comment next to it.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
