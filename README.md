@@ -19,7 +19,7 @@ The app is plain HTML, CSS and JavaScript in `app/`. There is no build step. You
 1. Run `npm run dev`.
 2. Open http://localhost:5173/.
 
-To run the tests, run `npm test`.
+To run the tests, run `npm install` one time, then `npm test`. The app has no dependencies. The tests use one development dependency, [jsdom](https://github.com/jsdom/jsdom), to run the Preview sanitizer in a document (`test/sanitize.test.js`).
 
 To test on a phone, the app needs HTTPS:
 
