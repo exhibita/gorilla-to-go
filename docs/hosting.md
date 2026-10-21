@@ -6,10 +6,12 @@ The repository `exhibita/gorilla-to-go` is public. GitHub Pages is free for a pu
 
 ## How the deploy works
 
-The workflow `.github/workflows/pages.yml` runs on each push to `main`. You can also start it by hand on the **Actions** tab.
+The workflow `.github/workflows/pages.yml` runs on each pull request and on each push to `main`. You can also start it by hand on the **Actions** tab.
 
-1. The `test` job runs `npm test`.
-2. If the tests pass, the `deploy` job publishes the `app/` folder. It does not publish other folders.
+1. The `test` job runs `npm test`. On a pull request, only this job runs. Its result shows as the status check `test` on the pull request, so a change cannot merge into `main` when a test fails.
+2. On a push to `main` (or a run started by hand), the `deploy` job runs after the tests pass. It publishes the `app/` folder. It does not publish other folders.
+
+Each action in the workflow is pinned to a commit SHA, with the version in a comment next to it. Dependabot (`.github/dependabot.yml`) opens a pull request when a new version of an action, or of a development dependency, is out.
 
 The custom domain is a setting in **Settings > Pages**. GitHub ignores the file `app/CNAME` when a workflow deploys the site. The file only records the domain in the repository.
 

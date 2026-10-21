@@ -2,6 +2,13 @@
 
 The newest version is first. Each version has the date when it went live.
 
+## 0.13.0 — 2026-10-21
+
+- Security review of the app. The app now refuses to run inside another website's page.
+- Add a site: the app tells you when the branch name is not a name that git accepts.
+- Remove a site: the dialog tells you that the token still works on GitHub, and where to delete it.
+- The project has a security policy. SECURITY.md on GitHub says how to report a security problem.
+
 ## 0.12.0 — 2026-10-19
 
 - Tap the version number in the About box to see what is new.

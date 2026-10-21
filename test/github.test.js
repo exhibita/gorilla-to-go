@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRepoInput, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText, saveFile, pathExists, deleteFile } from '../app/js/github.js';
+import { parseRepoInput, isBranchName, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText, saveFile, pathExists, deleteFile } from '../app/js/github.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -65,6 +65,21 @@ test('parseRepoInput refuses text that is not a repository', () => {
     for (const bad of ['', '   ', 'exhibita', 'exhibita/', '/gtg', 'a/b/c d', 'https://gitlab.com/a/b', 'own er/repo']) {
         assert.equal(parseRepoInput(bad), null, `accepted "${bad}"`);
     }
+});
+
+// ---------- isBranchName ----------
+
+test('isBranchName accepts names that git accepts', () => {
+    for (const good of ['main', 'gh-pages', 'feature/new-page', 'release-1.2', 'v2.0', 'a/b/c', 'ünïcode']) {
+        assert.ok(isBranchName(good), `refused "${good}"`);
+    }
+});
+
+test('isBranchName refuses names that git refuses, and path tricks', () => {
+    const bad = ['', ' ', 'a b', '..', 'a/../b', '../../user', '/main', 'main/', 'a//b', '.hidden', 'a/.b', 'main.', 'x.lock', 'x.lock/y',
+        '-main', '@', 'a@{b', 'a~b', 'a^b', 'a:b', 'a?b', 'a*b', 'a[b', 'a\\b', 'a\tb', 'a\nb', 'a\x7fb', 'm'.repeat(256)];
+    for (const name of bad) assert.equal(isBranchName(name), false, `accepted ${JSON.stringify(name)}`);
+    assert.equal(isBranchName(null), false);
 });
 
 // ---------- checkSite ----------
