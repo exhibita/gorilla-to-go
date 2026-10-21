@@ -1,10 +1,27 @@
-# Future versions (after the MVP)
+# Future work
 
-- **Guided onboarding** for non-technical users in the installed PWA: create a GitHub account, sign in and create the base site. Include install instructions for iPhone.
-- **GitHub sign-in (OAuth)** to replace personal access tokens. This needs a small server for the token exchange.
-- **Template upgrades from the app:** the app commits the new template files to a site. If an upgrade changes `.github/workflows/`, the token needs the Workflows (read and write) permission.
-- **Links page support:** a list editor for the `links:` frontmatter. Reuse the gallery list-editing code.
-- **CodeMirror 6** editor, if the textarea is not enough.
-- **Image cleanup:** remove images that no page uses.
-- **Lightbox for blog post images** (a Vanilla Gorilla template change, not a GTG change): when a blog post has two or more images, `build.js` makes each image open a large view with previous and next, as the gallery does. Use the same CSS-only lightbox (`:target`), with IDs that do not clash with the gallery (`#img1`). GTG needs no change: it writes plain Markdown images. Decide whether a post with one image also gets the large view.
-- **AI assist:** for example, "draft this post for me".
+Future work is tracked in GitHub issues, not in this file:
+
+- **Gorilla To Go:** https://github.com/exhibita/gorilla-to-go/issues
+- **Vanilla Gorilla (the template):** https://github.com/exhibita/vanilla-gorilla/issues
+
+## Labels in Gorilla To Go
+
+| Label | Meaning |
+|---|---|
+| `bug` | Something does not work as it should. |
+| `enhancement` | A new feature or a change that is ready to plan. |
+| `idea` | A feature that needs a decision before work starts. |
+| `testing` | A test to run, on a device or by hand. |
+
+## How to use them
+
+1. Open an issue for each problem or idea, with the background and a "Done when" checklist.
+2. In the PR that does the work, write `Closes #<number>` in the description. The issue closes when the PR is merged.
+3. When an `idea` gets a decision, change its label to `enhancement`, or close it with the reason.
+
+## Vanilla Gorilla issues that GTG users will see
+
+- [vanilla-gorilla#5](https://github.com/exhibita/vanilla-gorilla/issues/5): commit `config.json`, so the RSS feed and sitemap use the site's own address.
+- [vanilla-gorilla#6](https://github.com/exhibita/vanilla-gorilla/issues/6): keep a hand-built `/gallery/` page when the site also has Markdown galleries. Until then, adding a gallery in GTG replaces such a page (for example the hartisan.hair portfolio).
+- [vanilla-gorilla#7](https://github.com/exhibita/vanilla-gorilla/issues/7): a lightbox for images in blog posts. GTG needs no change.
