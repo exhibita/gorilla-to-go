@@ -6,6 +6,27 @@
 (function () {
     var KEY = 'gtg.recovered';
 
+    // The app holds tokens, so it does not run inside another page (clickjacking). A CSP in a <meta>
+    // tag cannot set frame-ancestors, so this check does it. app.js sees the flag and does not start.
+    var framed = true;
+    try {
+        framed = window.top !== window.self;
+    } catch (e) {
+        // A cross-origin top window throws: the app is in a frame.
+    }
+    if (framed) {
+        window.__gtgFramed = true;
+        document.addEventListener('DOMContentLoaded', function () {
+            var app = document.getElementById('app');
+            if (!app) return;
+            app.innerHTML = '<div class="screen"><div class="screen-body">' +
+                '<h1 class="page-title">Gorilla To Go does not run inside another page</h1>' +
+                '<p><a class="btn btn-primary" href="./" target="_top">Open Gorilla To Go</a></p>' +
+                '</div></div>';
+        });
+        return;
+    }
+
     function started() {
         return window.__gtgStarted === true;
     }

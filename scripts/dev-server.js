@@ -21,7 +21,18 @@ const TYPES = {
 };
 
 const server = http.createServer((req, res) => {
-    const urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    // A bad %-sequence or a NUL byte would throw (and stop the server): answer 400 instead.
+    let urlPath;
+    try {
+        urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    } catch {
+        res.writeHead(400).end('Bad request');
+        return;
+    }
+    if (urlPath.includes('\0')) {
+        res.writeHead(400).end('Bad request');
+        return;
+    }
     let file = path.join(APP_DIR, urlPath.endsWith('/') ? `${urlPath}index.html` : urlPath);
 
     // Refuse paths that leave app/.
@@ -47,6 +58,7 @@ const server = http.createServer((req, res) => {
     });
 });
 
-server.listen(PORT, () => {
+// Only this computer can reach the server. ngrok runs on this computer, so the phone still works.
+server.listen(PORT, '127.0.0.1', () => {
     console.log(`Gorilla To Go dev server: http://localhost:${PORT}/`);
 });

@@ -150,3 +150,14 @@ test('a tab in an indent is read, as the site build does', () => {
     assert.equal(error, null);
     assert.deepEqual(data.images, [{ path: './a.jpg' }]);
 });
+
+test('a key named __proto__ is a normal key and does not change the prototype', () => {
+    const { data, error } = parseFrontmatter(page('title: Test\n__proto__:\n  - path: ./a.jpg\nimages:\n  - path: ./b.jpg\n    __proto__: x'));
+    assert.equal(error, null);
+    assert.equal(Object.getPrototypeOf(data), Object.prototype);
+    assert.equal(Object.getPrototypeOf(data.images[0]), Object.prototype);
+    assert.ok(Object.hasOwn(data, '__proto__'));
+    assert.deepEqual(data.images, [{ path: './b.jpg', ['__proto__']: 'x' }]);
+    assert.equal(data.title, 'Test');
+    assert.equal(Object.prototype.path, undefined);
+});

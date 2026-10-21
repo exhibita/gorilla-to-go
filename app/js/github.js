@@ -40,6 +40,17 @@ export function parseRepoInput(text) {
     return { owner, repo };
 }
 
+// True when the text is a branch name that git accepts (git check-ref-format --branch). The name
+// goes into API paths, so ".." and "/" tricks must not pass.
+export function isBranchName(text) {
+    const name = String(text ?? '');
+    if (!name || name.length > 255) return false;
+    if (/[\x00-\x20\x7f~^:?*[\\]/.test(name)) return false; // Control characters, space, and git's reserved characters
+    if (/\.\.|@\{|\/\/|\.lock(\/|$)/.test(name)) return false;
+    if (name === '@' || name.startsWith('-') || name.startsWith('/') || name.endsWith('/') || name.endsWith('.')) return false;
+    return name.split('/').every(part => part !== '' && !part.startsWith('.'));
+}
+
 class NetworkError extends Error {}
 class CancelledError extends Error {}
 
