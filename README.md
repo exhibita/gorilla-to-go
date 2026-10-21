@@ -14,7 +14,7 @@ GTG does not build the site. It commits Markdown files and images to the site's 
 
 ## Development
 
-The app is plain HTML, CSS and JavaScript in `app/`. There is no build step. You need Node.js 22 or later.
+The app is plain HTML, CSS and JavaScript in `app/`. There is no build step. You need Node.js 24.15 or later (or 22.22 or later) for the dev server and the tests. The tests use jsdom, which sets this requirement.
 
 1. Run `npm run dev`.
 2. Open http://localhost:5173/.
