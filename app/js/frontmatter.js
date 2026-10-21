@@ -33,6 +33,8 @@ const BLOCK = /^([|>])[+-]?(?:[ \t]+#.*)?$/;
 
 const indentOf = line => line.match(/^[ \t]*/)[0].length;
 const isBlankOrComment = line => /^[ \t]*(#.*)?$/.test(line);
+// An own property, also for the key __proto__ (a plain assignment would change the prototype).
+const setKey = (object, key, value) => Object.defineProperty(object, key, { value, enumerable: true, writable: true, configurable: true });
 
 function parseYaml(text) {
     const lines = text.split('\n');
@@ -61,14 +63,14 @@ function parseYaml(text) {
                 i++;
             }
             while (blockLines.at(-1) === '') blockLines.pop();
-            data[key] = block[1] === '|'
+            setKey(data, key, block[1] === '|'
                 ? blockLines.join('\n')
-                : blockLines.reduce((text, part) => (part === '' ? `${text}\n` : text && !text.endsWith('\n') ? `${text} ${part}` : text + part), '');
+                : blockLines.reduce((text, part) => (part === '' ? `${text}\n` : text && !text.endsWith('\n') ? `${text} ${part}` : text + part), ''));
             continue;
         }
 
         if (rest !== '' && !rest.startsWith('#')) {
-            data[key] = parseScalar(rest, i);
+            setKey(data, key, parseScalar(rest, i));
             continue;
         }
 
@@ -77,12 +79,12 @@ function parseYaml(text) {
         while (next < lines.length && isBlankOrComment(lines[next])) next++;
         if (next < lines.length && ITEM_LINE.test(lines[next])) {
             const parsed = parseList(lines, next);
-            data[key] = parsed.list;
+            setKey(data, key, parsed.list);
             i = parsed.end;
         } else if (next < lines.length && indentOf(lines[next]) > 0) {
             throw new Error(`Line ${next + 1}: the app cannot read a map inside "${key}".`);
         } else {
-            data[key] = null;
+            setKey(data, key, null);
         }
     }
     return data;
@@ -117,7 +119,7 @@ function parseList(lines, start) {
                     const more = lines[i].trim().match(KEY_LINE);
                     if (!more) throw new Error(`Line ${i + 1}: this is not a "key: value" line.`);
                     if (Object.hasOwn(map, more[1])) throw new Error(`Line ${i + 1}: the key "${more[1]}" is in this item two times.`);
-                    map[more[1]] = more[2] ? parseScalar(more[2].trim(), i + 1) : null;
+                    setKey(map, more[1], more[2] ? parseScalar(more[2].trim(), i + 1) : null);
                 }
                 i++;
             }

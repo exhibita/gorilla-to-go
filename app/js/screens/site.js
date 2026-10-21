@@ -152,6 +152,7 @@ export async function siteScreen(container, [id]) {
         <div class="sheet-body">
             <h2 class="sheet-title" id="remove-title">Remove ${name}?</h2>
             <p>The app deletes this site, its token and its saved pages from this device. The repository on GitHub does not change.</p>
+            <p>The token still works on GitHub. If you do not need it any more, delete it there too: <strong>Settings &gt; Developer settings &gt; Personal access tokens</strong>.</p>
             <p class="banner" id="remove-new-pages" hidden></p>
             <p class="message-error" id="remove-error" role="alert"></p>
             <button type="button" class="btn btn-danger" id="confirm-remove">Remove site</button>

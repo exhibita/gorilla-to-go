@@ -1,6 +1,6 @@
 // Add a site: repository, branch, name, token, and the checks. The checks run automatically
 // after the token is entered (decision 15). "Add site" is available only when all checks pass.
-import { parseRepoInput, checkSite, CHECKS } from '../github.js';
+import { parseRepoInput, isBranchName, checkSite, CHECKS } from '../github.js';
 import { defaultName } from '../sites-logic.js';
 import { addSite, DuplicateSiteError } from '../sites.js';
 import { escapeHtml, icon } from '../dom.js';
@@ -53,7 +53,8 @@ export function addSiteScreen(container) {
         <div class="field-row">
             <div class="field">
                 <label for="branch">Branch</label>
-                <input class="input" id="branch" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="${escapeHtml(draft.branch)}">
+                <input class="input" id="branch" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="branch-hint" value="${escapeHtml(draft.branch)}">
+                <div class="field-hint field-hint--error" id="branch-hint" hidden>This is not a branch name.</div>
             </div>
             <div class="field">
                 <label for="name">Name in the app</label>
@@ -63,7 +64,7 @@ export function addSiteScreen(container) {
         <div class="field">
             <label for="token">Personal access token</label>
             <div class="input-group">
-                <input id="token" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="${escapeHtml(draft.token)}">
+                <input id="token" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
                 <button type="button" class="icon-btn icon-btn--plain" id="show-token" aria-label="Show token" aria-pressed="false">${icon('eye')}</button>
                 <button type="button" class="btn-small" id="paste-token">Paste</button>
             </div>
@@ -87,6 +88,8 @@ export function addSiteScreen(container) {
     const branchInput = $('branch');
     const nameInput = $('name');
     const tokenInput = $('token');
+    // As a property, not in the HTML: the token must not sit in the markup of the screen.
+    tokenInput.value = draft.token;
     const addButton = $('add-site');
     const errorBox = $('add-error');
 
@@ -121,7 +124,11 @@ export function addSiteScreen(container) {
         repoInput.setAttribute('aria-invalid', String(repoInvalid));
         repoHint.textContent = repoInvalid ? `This is not a GitHub repository. ${REPO_HINT}` : REPO_HINT;
         repoHint.classList.toggle('field-hint--error', repoInvalid);
-        if (!parsed || !draft.branch.trim() || !draft.token.trim()) {
+        const branch = draft.branch.trim();
+        const branchInvalid = Boolean(branch) && !isBranchName(branch);
+        branchInput.setAttribute('aria-invalid', String(branchInvalid));
+        $('branch-hint').hidden = !branchInvalid;
+        if (!parsed || !branch || branchInvalid || !draft.token.trim()) {
             renderChecks(null);
             return;
         }
@@ -220,5 +227,7 @@ export function addSiteScreen(container) {
         clearTimeout(timer);
         runId++;
         controller?.abort();
+        // The values stay only for a help page and back. Any other screen forgets them, with the token.
+        if (!location.hash.startsWith('#/help/')) clearDraft();
     };
 }
