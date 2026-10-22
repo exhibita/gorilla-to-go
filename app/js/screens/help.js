@@ -1,5 +1,5 @@
 // Help pages inside the app, so they work offline (decision 16).
-// Token page: from docs/github-token.md. Upgrade page: from vanilla-gorilla docs/UPGRADE-v2.md.
+// Token page: from docs/github-token.md. Upgrade page: from vanilla-gorilla docs/UPGRADE-v2.md and UPGRADE-v3.md.
 // Install page: from docs/install-app.md (help-install.js).
 // What is new: CHANGELOG.md. All versions from GitHub when online; the last 3 (in the app) when offline.
 import { marked } from '../../vendor/marked/marked.esm.js';
@@ -10,6 +10,7 @@ import { sanitizeHtml } from '../sanitize.js';
 import { latestEntries } from '../changelog.js';
 import { RECENT_CHANGES } from '../changelog-recent.js';
 import { INSTALL_PAGE } from './help-install.js';
+import { LINKS_TEMPLATE_VERSION } from '../links.js';
 import { VERSION } from '../version.js';
 
 const TOKEN_PAGE = `
@@ -102,7 +103,26 @@ const UPGRADE_PAGE = `
     <li>Make sure the GitHub Actions deploy is successful.</li>
 </ol>
 <p>Then add the site in Gorilla To Go again.</p>
-<p><a class="text-link text-link--small" href="https://github.com/exhibita/vanilla-gorilla/blob/main/docs/UPGRADE-v2.md" target="_blank" rel="noopener noreferrer">Read the full upgrade guide on GitHub ${icon('external', 14)}</a></p>`;
+<p><a class="text-link text-link--small" href="https://github.com/exhibita/vanilla-gorilla/blob/main/docs/UPGRADE-v2.md" target="_blank" rel="noopener noreferrer">Read the full upgrade guide on GitHub ${icon('external', 14)}</a></p>
+
+<h2>Upgrade to version ${LINKS_TEMPLATE_VERSION} for links pages</h2>
+<p>Version ${LINKS_TEMPLATE_VERSION} adds the links page: a page of link buttons, for example for a social media profile. Gorilla To Go can make links pages only on a site with version ${LINKS_TEMPLATE_VERSION}. A site on version 1 must do the version 2 steps first.</p>
+<ol>
+    <li>Make a new branch in the site repository.</li>
+    <li>Copy <code>build.js</code> from the template into the site.</li>
+    <li>Copy <code>create-page.js</code> from the template into the site.</li>
+    <li>Copy <code>src/skeletons/links-skeleton.html</code> from the template into the site.</li>
+    <li>Copy the "Links Page" block from <code>src/css/style.css</code> of the template to the end of <code>src/css/style.css</code> in the site.</li>
+    <li>In <code>package.json</code>, change the version:
+        <pre><code>"vanillaGorilla": { "templateVersion": ${LINKS_TEMPLATE_VERSION} }</code></pre>
+    </li>
+    <li>Run <code>npm run build</code>.</li>
+    <li>Make sure the build shows <code>Build complete.</code></li>
+    <li>Merge the branch into <code>main</code>.</li>
+    <li>Make sure the GitHub Actions deploy is successful.</li>
+</ol>
+<p>Existing pages do not change. You do not have to add the site again: the app reads the version each time you open the site.</p>
+<p><a class="text-link text-link--small" href="https://github.com/exhibita/vanilla-gorilla/blob/main/docs/UPGRADE-v3.md" target="_blank" rel="noopener noreferrer">Read the version ${LINKS_TEMPLATE_VERSION} upgrade guide on GitHub ${icon('external', 14)}</a></p>`;
 
 function helpScreen(container, title, body) {
     container.innerHTML = `

@@ -565,6 +565,20 @@ export async function getChangelog({ fetch = globalThis.fetch, signal, timeoutMs
     }
 }
 
+// The stylesheet of the site (src/css/style.css), for the look of the Preview (site-look.js).
+// Returns the text, or null when the file cannot be read (for example offline, or no such file).
+export async function getSiteCss({ owner, repo, branch, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    try {
+        const response = await request(fetch, token, `${repoPath(owner, repo)}/contents/src/css/style.css?ref=${encodeURIComponent(branch)}`, {
+            signal, timeoutMs, accept: 'application/vnd.github.raw+json'
+        });
+        return response.ok ? await response.text() : null;
+    } catch (err) {
+        if (err instanceof CancelledError) throw err;
+        return null;
+    }
+}
+
 const IMAGE_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml' };
 
 // An image of the site as a data: URL, for the Preview (the CSP allows data: images, not GitHub

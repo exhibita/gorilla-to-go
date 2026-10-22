@@ -31,6 +31,8 @@
     --page-text: #7a5a22;
     --gallery-bg: #f5e1d8;
     --gallery-text: #8a4a30;
+    --links-bg: #dfe8ef;
+    --links-text: #30506b;
     --font-ui: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --font-title: 'Playfair Display', Georgia, serif;
     --radius: 12px;
@@ -60,6 +62,8 @@
         --page-text: #e6c78f;
         --gallery-bg: #3f2c24;
         --gallery-text: #eab59c;
+        --links-bg: #253039;
+        --links-text: #a9c6de;
     }
 }
 
@@ -86,6 +90,8 @@
     --page-text: #e6c78f;
     --gallery-bg: #3f2c24;
     --gallery-text: #eab59c;
+    --links-bg: #253039;
+    --links-text: #a9c6de;
 }
 
 /* ---------- Base ---------- */
@@ -561,6 +567,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .type-label--blog { background: var(--blog-bg); color: var(--blog-text); }
 .type-label--page { background: var(--page-bg); color: var(--page-text); }
 .type-label--gallery { background: var(--gallery-bg); color: var(--gallery-text); }
+.type-label--links { background: var(--links-bg); color: var(--links-text); }
 
 .draft-label { padding: 1px 10px; border: 1px dashed var(--muted); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 600; }
 
@@ -790,6 +797,28 @@ button, input, textarea { font: inherit; color: inherit; }
 .segmented button:disabled { opacity: 0.45; cursor: not-allowed; }
 .preview-gallery figure { margin: 0; }
 .preview-gallery figcaption { margin-top: 4px; color: var(--muted); font-size: 13px; }
+
+/* ---------- Links view and Preview of a links page ---------- */
+.links-view { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-bottom: 12px; }
+.links-view > section { display: flex; flex-direction: column; gap: 10px; }
+.links-view h2, .links-view p { margin: 0; }
+.links-view .btn { flex: none; }
+.links-picture-row { display: flex; gap: 12px; align-items: flex-start; }
+.links-picture-frame { flex: none; width: 96px; aspect-ratio: 1; border-radius: var(--radius); overflow: hidden; }
+.links-picture-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.links-picture-actions p { margin: 0; overflow-wrap: anywhere; }
+.link-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.link-list > li { display: flex; }
+.link-row { width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--text); font: inherit; text-align: left; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; cursor: pointer; }
+.link-row:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.link-row-text { font-weight: 600; overflow-wrap: anywhere; }
+.link-row-url { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+/* As the template: the picture is at most a third of --links-min-width (360px), centered. More specific
+   than .editor-preview img, also while the image loads. */
+.editor-preview .preview-links-picture, .editor-preview .preview-links-picture:not([src]) { width: 100%; max-width: 120px; min-height: 0; margin: 0 auto 20px; }
+.preview-links { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.preview-link-button { display: block; padding: 12px 16px; border-radius: var(--radius); background: var(--primary); color: var(--on-primary); font-weight: 600; text-align: center; overflow-wrap: anywhere; }
+.input-code { font-family: ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace; font-size: 16px; }
 .editor-preview .preview-gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; margin: 0; }
 
 /* ---------- Drafts and publish status (step 9) ---------- */
@@ -856,3 +885,26 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 .version-link:hover::after, .version-link:focus-visible::after { opacity: 1; }
 @media (hover: none) { .version-link::after { display: none; } }
+
+/* ---------- Preview in the look of the site (site-look.js, decision 31) ----------
+   The editor sets the --site-* properties on #preview. Every rule of the Preview that uses an app
+   colour has a site version here, so the Preview does not follow the app theme. */
+.editor-preview.site-look { background: var(--site-bg); color: var(--site-text); font-family: var(--site-font-body); }
+/* A blog post is on the surface card of the site (article.post). A see-through surface shows the background. */
+.editor-preview.site-look.preview--blog { background: linear-gradient(var(--site-surface), var(--site-surface)), var(--site-bg); }
+.site-look h1, .site-look h2, .site-look h3, .site-look h4 { font-family: var(--site-font-heading); font-weight: 700; line-height: 1.25; color: var(--site-heading); }
+.site-look h1 { margin: 0 0 16px; font-size: 28px; }
+.site-look a { color: var(--site-link); }
+.site-look blockquote { border-left-color: var(--site-link); color: var(--site-muted); }
+.site-look img { border-radius: var(--site-radius); }
+.site-look img:not([src]) { background: rgba(0, 0, 0, 0.06); }
+.site-look .preview-image { border-color: var(--site-border); color: var(--site-muted); }
+.site-look code, .site-look pre, .site-look th { background: rgba(0, 0, 0, 0.06); }
+.site-look pre code { background: none; }
+.site-look th, .site-look td { border-color: var(--site-border); }
+.site-look hr { border-top-color: var(--site-border); }
+.site-look .preview-gallery figcaption { color: var(--site-muted); }
+.site-look .preview-link-button { background: var(--site-button); color: var(--site-button-text); border: 1px solid var(--site-button-border); border-radius: var(--site-radius); font-weight: 500; }
+/* A links page: everything is centered, and the text is muted (.links-page). */
+.site-look.preview--links { text-align: center; }
+.site-look.preview--links .preview-body { color: var(--site-muted); }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { commitFiles, gitBlobSha, getImageDataUrl, listFolder } from '../app/js/github.js';
+import { commitFiles, gitBlobSha, getImageDataUrl, getSiteCss, listFolder } from '../app/js/github.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -264,6 +264,20 @@ test('getImageDataUrl reads the file bytes from GitHub and makes a data: URL', a
     assert.equal(url, `data:image/jpeg;base64,${CAT.toString('base64')}`);
     assert.equal(calls[0].url, `${API}${REPO}/contents/src/images/blog/my%20post/cat.jpg?ref=main`);
     assert.equal(calls[0].init.headers.Accept, 'application/vnd.github.raw+json');
+});
+
+test('getSiteCss reads src/css/style.css as text, and gives null when it cannot', async () => {
+    const calls = [];
+    const fetch = async (url, init) => {
+        calls.push({ url, init });
+        return new Response(':root { --bg-primary: #fff; }', { status: 200 });
+    };
+    const base = { owner: 'exhibita', repo: 'gtg-test-site', branch: 'feature/x', token: TOKEN };
+    assert.equal(await getSiteCss({ ...base, fetch }), ':root { --bg-primary: #fff; }');
+    assert.equal(calls[0].url, `${API}${REPO}/contents/src/css/style.css?ref=feature%2Fx`);
+    assert.equal(calls[0].init.headers.Accept, 'application/vnd.github.raw+json');
+    assert.equal(await getSiteCss({ ...base, fetch: async () => json(404, {}) }), null);
+    assert.equal(await getSiteCss({ ...base, fetch: async () => { throw new TypeError('Failed to fetch'); } }), null);
 });
 
 test('getImageDataUrl gives null for a missing file, an unknown type or no connection', async () => {

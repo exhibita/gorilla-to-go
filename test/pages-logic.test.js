@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPath, pageSummary, sortPages, filterPages, formatDate, listTimeText, TYPE_LABELS } from '../app/js/pages-logic.js';
+import { classifyPath, pageType, pageSummary, sortPages, filterPages, formatDate, listTimeText, TYPE_LABELS } from '../app/js/pages-logic.js';
 import { parseFrontmatter } from '../app/js/frontmatter.js';
 
 test('blog posts and galleries are known by their path', () => {
@@ -26,8 +26,27 @@ test('pageSummary reads the title, date, draft flag and image count', () => {
     const fm = parseFrontmatter('---\ntitle: Trip\ndate: 2026-05-01\ndraft: "true"\nimages:\n  - path: ./a.jpg\n  - path: ./b.jpg\n---\nText');
     assert.deepEqual(pageSummary('src/gallery/trip/index.md', 'abc', fm), {
         path: 'src/gallery/trip/index.md', sha: 'abc', type: 'gallery', slug: 'trip',
-        title: 'Trip', date: '2026-05-01', draft: true, imageCount: 2, error: null
+        title: 'Trip', date: '2026-05-01', draft: true, imageCount: 2, linkCount: 0, error: null
     });
+});
+
+test('a page with skeleton: links is a links page, at any path (as build.js isLinksPage)', () => {
+    assert.equal(pageType('src/links/index.md', { skeleton: 'links' }), 'links');
+    assert.equal(pageType('src/blog/me/index.md', { skeleton: 'links' }), 'links');
+    assert.equal(pageType('src/gallery/me/index.md', { skeleton: 'links' }), 'links');
+    assert.equal(pageType('src/links/index.md', { skeleton: 'page' }), 'page');
+    assert.equal(pageType('src/links/index.md', { skeleton: 'Links' }), 'page', 'the build compares the exact text');
+    assert.equal(pageType('src/gallery/trip/index.md', {}), 'gallery');
+    assert.equal(pageType('src/gallery/trip/index.md', undefined), 'gallery');
+});
+
+test('pageSummary of a links page has the links type and the link count', () => {
+    const fm = parseFrontmatter('---\ntitle: Me\nskeleton: links\nlinks:\n  - url: https://a.com\n    text: A\n  - url: https://b.com\n    text: B\n---\n');
+    const summary = pageSummary('src/links/index.md', 'abc', fm);
+    assert.equal(summary.type, 'links');
+    assert.equal(summary.slug, 'links');
+    assert.equal(summary.linkCount, 2);
+    assert.equal(summary.imageCount, 0);
 });
 
 test('pageSummary uses the slug when the title is missing or the front matter has an error', () => {
@@ -56,9 +75,11 @@ test('filterPages selects one type and searches title and slug, ignoring case', 
     const pages = [
         { type: 'blog', title: 'Hello World', slug: 'hello' },
         { type: 'page', title: 'Privacy Policy', slug: 'privacy' },
-        { type: 'gallery', title: 'Beach Trip', slug: 'summer-2026' }
+        { type: 'gallery', title: 'Beach Trip', slug: 'summer-2026' },
+        { type: 'links', title: 'Find me', slug: 'links' }
     ];
-    assert.deepEqual(filterPages(pages, { type: 'all', query: '' }).length, 3);
+    assert.deepEqual(filterPages(pages, { type: 'all', query: '' }).length, 4);
+    assert.deepEqual(filterPages(pages, { type: 'links', query: '' }).map(p => p.slug), ['links']);
     assert.deepEqual(filterPages(pages, { type: 'gallery', query: '' }).map(p => p.slug), ['summer-2026']);
     assert.deepEqual(filterPages(pages, { type: 'all', query: 'PRIVACY' }).map(p => p.slug), ['privacy']);
     assert.deepEqual(filterPages(pages, { type: 'all', query: 'summer' }).map(p => p.slug), ['summer-2026']);
@@ -72,7 +93,7 @@ test('formatDate shows the date in UTC, so it is not one day early in the US', (
 });
 
 test('type labels match design.md', () => {
-    assert.deepEqual(TYPE_LABELS, { blog: 'Blog', page: 'Page', gallery: 'Gallery' });
+    assert.deepEqual(TYPE_LABELS, { blog: 'Blog', page: 'Page', gallery: 'Gallery', links: 'Links page' });
 });
 
 test('listTimeText shows the time for today, and the date for an older list', () => {

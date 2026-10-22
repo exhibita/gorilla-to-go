@@ -125,8 +125,12 @@ export async function pageScreen(container, [siteId, path]) {
         const hasLocalEdit = Boolean(localEdit && localEdit.text !== text);
         const page = pageSummary(path, entry.sha, frontmatter);
         const { data } = frontmatter;
-        const fields = Object.entries(data).filter(([key]) => key !== 'title' && key !== 'description' && key !== 'images');
+        // The images: and links: lists, and the css: of a links page, have their own cards.
+        const isLinks = page.type === 'links';
+        const fields = Object.entries(data).filter(([key]) => !['title', 'description', 'images'].includes(key) && !(isLinks && (key === 'links' || key === 'css')));
         const images = Array.isArray(data.images) ? data.images : [];
+        const links = isLinks && Array.isArray(data.links) ? data.links : [];
+        const css = isLinks && typeof data.css === 'string' ? data.css.trim() : '';
 
         body.innerHTML = `
         <div class="page-meta">${pageMetaHtml(page)}</div>
@@ -147,6 +151,16 @@ export async function pageScreen(container, [siteId, path]) {
             <ol class="image-list">
                 ${images.map(image => `<li><span>${escapeHtml(image?.caption ?? image?.alt ?? '(no caption)')}</span><span class="muted small">${escapeHtml(image?.path ?? '(no path)')}</span></li>`).join('')}
             </ol>
+        </section>` : ''}
+        ${isLinks ? `<section class="card" aria-labelledby="links-title">
+            <h2 class="card-title" id="links-title">Links (${links.length})</h2>
+            ${links.length ? `<ol class="image-list">
+                ${links.map(link => `<li><span>${escapeHtml(String(link?.text ?? '(no text)'))}</span><span class="muted small">${escapeHtml(String(link?.url ?? '(no address)'))}</span></li>`).join('')}
+            </ol>` : '<p class="muted">This page has no links.</p>'}
+        </section>` : ''}
+        ${css ? `<section class="card" aria-labelledby="css-title">
+            <h2 class="card-title" id="css-title">Page CSS</h2>
+            <pre class="page-text">${escapeHtml(css)}</pre>
         </section>` : ''}
         <section class="card" aria-labelledby="text-title">
             <h2 class="card-title" id="text-title">Text</h2>

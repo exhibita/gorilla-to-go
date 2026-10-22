@@ -41,6 +41,9 @@ Text on primary buttons is `#ffffff` in light and `#1c1a18` in dark. Test the co
 | Blog | `#e4ebe3` / `#3f513d` | `#2f3a2e` / `#b5c9b2` |
 | Page | `#f5ead6` / `#7a5a22` | `#3d3324` / `#e6c78f` |
 | Gallery | `#f5e1d8` / `#8a4a30` | `#3f2c24` / `#eab59c` |
+| Links page | `#dfe8ef` / `#30506b` | `#253039` / `#a9c6de` |
+
+The Links page colors have a contrast of 6.8:1 (light) and 7.6:1 (dark).
 
 ## Theme toggle
 
@@ -62,6 +65,16 @@ Text on primary buttons is `#ffffff` in light and `#1c1a18` in dark. Test the co
 - "New page": a round sage button at the bottom right.
 - Bottom sheets for frontmatter fields and confirmations.
 - Editor: Write/Preview toggle, no side-by-side view. Toolbar above the keyboard: heading, bold, italic, link, list, image, undo.
+- A gallery has a third view, Photos. A links page has a third view, Links: the picture (with its alt text) at the top, then one row per link with the button text and the address. A tap on a row opens a bottom sheet: button text, address, Move earlier, Move later, Remove. "Add link" is below the list.
+- Details of a links page: no date. It adds the "Show in the sitemap" switch and the Page CSS field.
+
+## Preview
+
+- The Preview box shows the page in the look of the site (decision 31): background, text, headings, links, buttons, fonts and radius come from the site's `src/css/style.css`. The rest of the editor follows the app theme, so the Preview reads as a window onto the site.
+- The Preview starts with the title of the page as a heading, as the skeletons do.
+- A blog post is on the surface colour of the site (the `article.post` card). Other pages are on the background colour.
+- A links page is centered, with the picture, the title, the text in the muted colour, and the buttons.
+- Before the app has read the site (for example the first time, offline), the Preview uses the template look.
 
 ## Launch screen
 

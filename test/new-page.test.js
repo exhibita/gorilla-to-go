@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { slugify, slugProblem, pagePath, localDate, newPageText, NEW_PAGE_TYPES } from '../app/js/new-page.js';
+import { slugify, slugProblem, pagePath, localDate, newPageText, newPageTypes, NEW_PAGE_TYPES } from '../app/js/new-page.js';
 import { parseFrontmatter } from '../app/js/frontmatter.js';
-import { classifyPath } from '../app/js/pages-logic.js';
+import { pageType } from '../app/js/pages-logic.js';
 
 test('slugify makes a lowercase address from the title', () => {
     assert.equal(slugify('Hello World'), 'hello-world');
@@ -27,8 +27,10 @@ test('pagePath puts each type in its folder (vanilla-gorilla-notes)', () => {
     assert.equal(pagePath('blog', 'my-post'), 'src/blog/my-post/index.md');
     assert.equal(pagePath('gallery', 'trip'), 'src/gallery/trip/index.md');
     assert.equal(pagePath('page', 'about'), 'src/about/index.md');
+    assert.equal(pagePath('links', 'me'), 'src/me/index.md', 'a links page is at the address of a page (decision 28)');
     for (const type of NEW_PAGE_TYPES.map(t => t.type)) {
-        assert.equal(classifyPath(pagePath(type, 'x')).type, type, 'the list shows the new page with the same type');
+        const text = newPageText({ title: 'X', date: '2026-10-21', description: '', type });
+        assert.equal(pageType(pagePath(type, 'x'), parseFrontmatter(text).data), type, 'the list shows the new page with the same type');
     }
 });
 
@@ -53,6 +55,8 @@ test('slugProblem refuses a page address that is a folder of the site', () => {
         assert.equal(slugProblem(folder, { type: 'page', existingPaths: [] }), 'The site uses this address for its own files. Use a different address.', folder);
     }
     assert.equal(slugProblem('images', { type: 'blog', existingPaths: [] }), null, '/blog/images/ is fine');
+    assert.equal(slugProblem('blog', { type: 'links', existingPaths: [] }), 'The site uses this address for its own files. Use a different address.');
+    assert.equal(slugProblem('links', { type: 'links', existingPaths: ['src/links/index.md'] }), 'A page with this address exists. Use a different address.');
 });
 
 test('localDate uses the date of the device, not the UTC date', () => {
@@ -72,4 +76,15 @@ test('newPageText writes valid front matter with title, date, description and sk
 test('newPageText leaves out an empty description, and uses the skeleton of each type', () => {
     assert.equal(newPageText({ title: 'About', date: '2026-10-18', description: '', type: 'page' }), '---\ntitle: "About"\ndate: 2026-10-18\nskeleton: page\n---\n\n');
     assert.match(newPageText({ title: 'Trip', date: '2026-10-18', description: '', type: 'gallery' }), /skeleton: gallery\n/);
+});
+
+test('newPageText of a links page has no date (the links skeleton does not show one)', () => {
+    assert.equal(newPageText({ title: 'Find me', date: '2026-10-21', description: '', type: 'links' }), '---\ntitle: "Find me"\nskeleton: links\n---\n\n');
+});
+
+test('newPageTypes offers a links page only on template version 3 or later (decision 27)', () => {
+    assert.deepEqual(newPageTypes(2).map(t => t.type), ['blog', 'page', 'gallery']);
+    assert.deepEqual(newPageTypes(undefined).map(t => t.type), ['blog', 'page', 'gallery']);
+    assert.deepEqual(newPageTypes(3).map(t => t.type), ['blog', 'page', 'gallery', 'links']);
+    assert.equal(newPageTypes(3).at(-1).label, 'Links page');
 });

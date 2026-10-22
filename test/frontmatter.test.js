@@ -78,6 +78,34 @@ test('block scalars with | and >', () => {
     assert.equal(data.title, 'Next');
 });
 
+test('a | block keeps the indent of each line after the indent of the block (the css: of a links page)', () => {
+    const { data, error } = parseFrontmatter(page([
+        'css: |',
+        '  .links-page {',
+        '    --links-max-width: 440px;',
+        '',
+        '  }',
+        'links:',
+        '  - url: https://example.com',
+        '    text: Example'
+    ].join('\n')));
+    assert.equal(error, null);
+    assert.equal(data.css, '.links-page {\n  --links-max-width: 440px;\n\n}');
+    assert.deepEqual(data.links, [{ url: 'https://example.com', text: 'Example' }]);
+});
+
+test('a | block with an indent indicator keeps the spaces at the start of the first line', () => {
+    const { data, error } = parseFrontmatter(page('css: |2\n    a { }\n  b { }\ntitle: Next'));
+    assert.equal(error, null);
+    assert.equal(data.css, '  a { }\nb { }');
+    assert.equal(data.title, 'Next');
+    assert.equal(parseFrontmatter(page('notes: |-\n  text')).data.notes, 'text');
+});
+
+test('a line in a | block with less indent than the first line is an error', () => {
+    assert.ok(parseFrontmatter(page('css: |\n    a {\n  }')).error);
+});
+
 test('Windows line endings and a byte order mark', () => {
     const { data, body } = parseFrontmatter('﻿---\r\ntitle: Windows\r\ndate: 2026-01-02\r\n---\r\nBody\r\n');
     assert.deepEqual(data, { title: 'Windows', date: '2026-01-02' });
