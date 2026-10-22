@@ -842,6 +842,7 @@ export async function editorScreen(container, [siteId, path]) {
             const repoPath = folder + freeName(file.name, prepared.extension);
             pendingImages = [...pendingImages, { path: repoPath, base64: prepared.base64, mimeType: prepared.mimeType }];
             fields.image = markdownPath(repoPath);
+            fields.image_alt = ''; // The alt text of the old picture does not describe the new one.
         } catch (err) {
             status(err instanceof ImageError ? err.message : 'The app cannot read this image. Use a JPEG or PNG.');
             return;
@@ -900,7 +901,7 @@ export async function editorScreen(container, [siteId, path]) {
         }
         // Values that did not change keep their exact text. Other keys of the item stay.
         const changed = { ...item };
-        for (const key of ['text', 'url']) if (typed[key] !== textOf(item[key]).trim()) changed[key] = typed[key];
+        for (const key of ['url', 'text']) if (typed[key] !== textOf(item[key]).trim()) changed[key] = typed[key]; // As in the template.
         links = linkIndex === -1 ? [...links, changed] : links.map((other, index) => (index === linkIndex ? changed : other));
         linkSheet.close();
         linksChanged();

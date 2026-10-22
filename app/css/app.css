@@ -801,6 +801,7 @@ button, input, textarea { font: inherit; color: inherit; }
 /* ---------- Links view and Preview of a links page ---------- */
 .links-view { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-bottom: 12px; }
 .links-view > section { display: flex; flex-direction: column; gap: 10px; }
+.links-view h2, .links-view p { margin: 0; }
 .links-view .btn { flex: none; }
 .links-picture-row { display: flex; gap: 12px; align-items: flex-start; }
 .links-picture-frame { flex: none; width: 96px; aspect-ratio: 1; border-radius: var(--radius); overflow: hidden; }
