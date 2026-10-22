@@ -46,6 +46,7 @@ const ASSETS = [
     'js/github.js',
     'js/image-resize.js',
     'js/images.js',
+    'js/links.js',
     'js/new-page.js',
     'js/pages-logic.js',
     'js/pages.js',

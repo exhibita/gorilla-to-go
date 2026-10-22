@@ -2,7 +2,7 @@
 // - splitPage + composePage give back the same text, byte for byte (line endings, BOM, comments).
 // - setFields changes only the lines of the fields that changed. Other keys and their order stay.
 // - Text values are written in double quotes, so the YAML is always valid (mvp-plan section 9).
-import { parseFrontmatter, isDraft } from './frontmatter.js';
+import { parseFrontmatter } from './frontmatter.js';
 
 const BLOCK = /^(---[ \t]*\r?\n)(?:([\s\S]*?)(\r?\n))?(---[ \t]*(?:\r?\n|$))/;
 
@@ -71,12 +71,12 @@ function keyRange(lines, key) {
     return { start, end };
 }
 
-// Set title, date and description in the YAML text. An empty value removes the key.
-// A value that did not change keeps its line exactly as it is.
+// Set title, date, description, and the image and image_alt of a links page, in the YAML text. An
+// empty value removes the key. A value that did not change keeps its line exactly as it is.
 export function setFields(raw, fields) {
     const current = parseFrontmatter(`---\n${raw}\n---\n`).data;
     const lines = raw === '' ? [] : raw.split('\n');
-    for (const key of ['title', 'date', 'description']) {
+    for (const key of ['title', 'date', 'description', 'image', 'image_alt']) {
         if (!(key in fields)) continue;
         const value = String(fields[key] ?? '').trim() === '' ? '' : String(fields[key]);
         const before = current[key] == null ? '' : String(current[key]);
@@ -89,20 +89,46 @@ export function setFields(raw, fields) {
     return lines.join('\n');
 }
 
-// Make the page a draft (draft: true, the boolean, decision 22) or not (no draft key). The text
-// changes only when the state changes, so draft: "TRUE" stays as it is on a draft.
-export function setDraft(raw, draft) {
+// Set a true/false key: "key: true" (the boolean) when on, no key when off. As in build.js, the
+// boolean true and the text "true" in any case are on. The text changes only when the state changes,
+// so draft: "TRUE" stays as it is on a draft, and sitemap: false stays when the switch stays off.
+export function setFlag(raw, key, on) {
     const parsed = parseFrontmatter(`---\n${raw}\n---\n`);
-    if (parsed.error || isDraft(parsed.data) === draft) return raw;
+    const value = parsed.data[key];
+    if (parsed.error || (value === true || String(value).toLowerCase() === 'true') === on) return raw;
     const lines = raw === '' ? [] : raw.split('\n');
-    const range = keyRange(lines, 'draft');
-    const replacement = draft ? ['draft: true'] : [];
+    const range = keyRange(lines, key);
+    const replacement = on ? [`${key}: true`] : [];
     if (range) lines.splice(range.start, range.end - range.start, ...replacement);
     else lines.push(...replacement);
     return lines.join('\n');
 }
 
-// A value in an images: item. A simple path stays plain, as in the template; other text is quoted.
+// Make the page a draft (draft: true, decision 22) or not (no draft key).
+export const setDraft = (raw, draft) => setFlag(raw, 'draft', draft);
+
+// Set a text of more than one line, for example the css: of a links page, as a "|" block. An empty
+// text removes the key. Blank lines at the end do not count, and the text changes only when the
+// value changes, so a block that the user did not change keeps its bytes.
+export function setBlock(raw, key, text) {
+    const parsed = parseFrontmatter(`---\n${raw}\n---\n`);
+    if (parsed.error) return raw;
+    const trimEnd = value => (typeof value === 'string' ? value.replace(/\s+$/, '') : '');
+    const value = trimEnd(String(text ?? '').replace(/\r\n?/g, '\n'));
+    if (value === trimEnd(parsed.data[key]) && (value !== '' || !Object.hasOwn(parsed.data, key))) return raw;
+    // A digit gives the indent when the first line starts with a space (YAML would read it as the indent).
+    const replacement = value === '' ? [] : [
+        `${key}: |${value.startsWith(' ') ? '2' : ''}`,
+        ...value.split('\n').map(line => (line.trim() === '' ? '' : `  ${line}`))
+    ];
+    const lines = raw === '' ? [] : raw.split('\n');
+    const range = keyRange(lines, key);
+    if (range) lines.splice(range.start, range.end - range.start, ...replacement);
+    else lines.push(...replacement);
+    return lines.join('\n');
+}
+
+// A value in a list item. A simple images: path stays plain, as in the template; other text is quoted.
 function itemValue(key, value) {
     if (value === null || value === undefined) return '';
     if (typeof value !== 'string') return String(value);
@@ -110,10 +136,10 @@ function itemValue(key, value) {
     return key === 'path' && /^[\w./-]+$/.test(value) && value.includes('/') && !value.startsWith('-') ? value : yamlText(value);
 }
 
-// The lines of the images: block. An empty text value is left out (the build then uses the caption
-// as the alt text).
-function imagesLines(items) {
-    const lines = ['images:'];
+// The lines of a list block. An empty text value is left out (in an images: item, the build then
+// uses the caption as the alt text).
+function listLines(key, items) {
+    const lines = [`${key}:`];
     for (const item of items) {
         if (item === null || typeof item !== 'object') {
             lines.push(`  - ${typeof item === 'string' ? yamlText(item) : String(item)}`);
@@ -128,18 +154,19 @@ function imagesLines(items) {
     return lines;
 }
 
-// Set the gallery images: list (decision 21). Only the images: block changes, and only when the list
-// changed. The list items are written with two spaces before "-".
-export function setImages(raw, items) {
+// Set a list of maps: the gallery images: list (decision 21) or the links: list of a links page.
+// Only the block of the key changes, and only when the list changed. The list items are written
+// with two spaces before "-".
+export function setList(raw, key, items) {
     const parsed = parseFrontmatter(`---\n${raw}\n---\n`);
     if (parsed.error) return raw;
-    const current = Array.isArray(parsed.data.images) ? parsed.data.images : [];
-    const hasKey = Object.hasOwn(parsed.data, 'images');
-    if (imagesLines(current).join('\n') === imagesLines(items).join('\n') && (hasKey || items.length === 0)) return raw;
+    const current = Array.isArray(parsed.data[key]) ? parsed.data[key] : [];
+    const hasKey = Object.hasOwn(parsed.data, key);
+    if (listLines(key, current).join('\n') === listLines(key, items).join('\n') && (hasKey || items.length === 0)) return raw;
 
     const lines = raw === '' ? [] : raw.split('\n');
-    const start = lines.findIndex(line => /^images[ \t]*:/.test(line));
-    if (start === -1) return [...lines, ...imagesLines(items)].join('\n');
+    const start = lines.findIndex(line => new RegExp(`^${key}[ \\t]*:`).test(line));
+    if (start === -1) return [...lines, ...listLines(key, items)].join('\n');
     // The key line, then the lines of its list: indented lines and items at column 0. Blank lines and
     // comments after the last item stay (a comment there can be about the next key). Comments between
     // the items go away when the list changes.
@@ -149,6 +176,8 @@ export function setImages(raw, items) {
         if (indentOf(lines[i]) === 0 && !lines[i].startsWith('-')) break;
         end = i + 1;
     }
-    lines.splice(start, end - start, ...imagesLines(items));
+    lines.splice(start, end - start, ...listLines(key, items));
     return lines.join('\n');
 }
+
+export const setImages = (raw, items) => setList(raw, 'images', items);

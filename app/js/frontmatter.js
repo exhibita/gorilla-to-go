@@ -29,7 +29,8 @@ export function isDraft(data) {
 // The s flag: "." also matches U+2028 and U+2029, which a value can hold (lines are split at \n only).
 const KEY_LINE = /^([A-Za-z0-9_][\w-]*)[ \t]*:(?:[ \t]+(.*)|[ \t]*)$/s;
 const ITEM_LINE = /^([ \t]*)-(?:[ \t]+(.*)|[ \t]*)$/s;
-const BLOCK = /^([|>])[+-]?(?:[ \t]+#.*)?$/;
+// "|" or ">", then an optional indent digit and chomping sign, in either order ("|2", "|-", "|2-").
+const BLOCK = /^([|>])(?:([1-9])[+-]?|[+-]([1-9])?)?(?:[ \t]+#.*)?$/;
 
 const indentOf = line => line.match(/^[ \t]*/)[0].length;
 const isBlankOrComment = line => /^[ \t]*(#.*)?$/.test(line);
@@ -57,15 +58,24 @@ function parseYaml(text) {
 
         const block = rest.match(BLOCK);
         if (block) {
-            const blockLines = [];
-            while (i < lines.length && (lines[i].trim() === '' || indentOf(lines[i]) > 0)) {
-                blockLines.push(lines[i].trim());
-                i++;
+            const blockStart = i;
+            while (i < lines.length && (lines[i].trim() === '' || indentOf(lines[i]) > 0)) i++;
+            const source = lines.slice(blockStart, i);
+            while (source.length && source.at(-1).trim() === '') source.pop();
+            if (block[1] === '>') {
+                setKey(data, key, source.map(line => line.trim())
+                    .reduce((text, part) => (part === '' ? `${text}\n` : text && !text.endsWith('\n') ? `${text} ${part}` : text + part), ''));
+                continue;
             }
-            while (blockLines.at(-1) === '') blockLines.pop();
-            setKey(data, key, block[1] === '|'
-                ? blockLines.join('\n')
-                : blockLines.reduce((text, part) => (part === '' ? `${text}\n` : text && !text.endsWith('\n') ? `${text} ${part}` : text + part), ''));
+            // A | block keeps its lines: only the indent of the block is removed (the css: of a links
+            // page keeps its own indents). The indent is the digit, else the indent of the first line.
+            const digit = block[2] ?? block[3];
+            const blockIndent = digit ? Number(digit) : indentOf(source.find(line => line.trim() !== '') ?? '');
+            setKey(data, key, source.map((line, n) => {
+                if (line.trim() === '') return '';
+                if (indentOf(line) < blockIndent) throw new Error(`Line ${blockStart + n + 1}: this line has less indent than the first line of the block.`);
+                return line.slice(blockIndent);
+            }).join('\n'));
             continue;
         }
 
