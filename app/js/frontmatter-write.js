@@ -2,7 +2,7 @@
 // - splitPage + composePage give back the same text, byte for byte (line endings, BOM, comments).
 // - setFields changes only the lines of the fields that changed. Other keys and their order stay.
 // - Text values are written in double quotes, so the YAML is always valid (mvp-plan section 9).
-import { parseFrontmatter } from './frontmatter.js';
+import { parseFrontmatter, isTrue } from './frontmatter.js';
 
 const BLOCK = /^(---[ \t]*\r?\n)(?:([\s\S]*?)(\r?\n))?(---[ \t]*(?:\r?\n|$))/;
 
@@ -94,8 +94,7 @@ export function setFields(raw, fields) {
 // so draft: "TRUE" stays as it is on a draft, and sitemap: false stays when the switch stays off.
 export function setFlag(raw, key, on) {
     const parsed = parseFrontmatter(`---\n${raw}\n---\n`);
-    const value = parsed.data[key];
-    if (parsed.error || (value === true || String(value).toLowerCase() === 'true') === on) return raw;
+    if (parsed.error || isTrue(parsed.data[key]) === on) return raw;
     const lines = raw === '' ? [] : raw.split('\n');
     const range = keyRange(lines, key);
     const replacement = on ? [`${key}: true`] : [];

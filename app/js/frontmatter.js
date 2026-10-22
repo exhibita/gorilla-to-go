@@ -20,11 +20,11 @@ export function parseFrontmatter(text) {
     }
 }
 
+// A true/false value as build.js reads it: the boolean true, or the text "true" in any case.
+export const isTrue = value => value === true || String(value).toLowerCase() === 'true';
+
 // A page with "draft: true", or the text "true" in any case, is a draft (decision 22).
-export function isDraft(data) {
-    const value = data?.draft;
-    return value === true || String(value).toLowerCase() === 'true';
-}
+export const isDraft = data => isTrue(data?.draft);
 
 // The s flag: "." also matches U+2028 and U+2029, which a value can hold (lines are split at \n only).
 const KEY_LINE = /^([A-Za-z0-9_][\w-]*)[ \t]*:(?:[ \t]+(.*)|[ \t]*)$/s;

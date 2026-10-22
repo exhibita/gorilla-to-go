@@ -54,6 +54,7 @@ const ASSETS = [
     'js/sanitize.js',
     'js/screens/about.js',
     'js/screens/add-site.js',
+    'js/screens/editor-links.js',
     'js/screens/editor.js',
     'js/screens/help-install.js',
     'js/screens/help.js',

@@ -1,15 +1,17 @@
 // Editor (mvp-plan section 6, screen 5): a plain textarea with a toolbar (decision 4), Write/Preview,
-// Details for the front matter fields, and Publish. Changes are kept on the device while the user
-// types. Publish commits with the SHA of the file the user opened, so a newer change on GitHub
-// stops the save (mvp-plan section 9).
+// Details for the front matter fields, and Publish. A gallery has a Photos view, a links page a Links
+// view. Changes are kept on the device while the user types. Publish commits with the SHA of the file
+// the user opened, so a newer change on GitHub stops the save (mvp-plan section 9).
 import { marked } from '../../vendor/marked/marked.esm.js';
 import { getToken } from '../auth.js';
 import { getSite } from '../sites.js';
 import { getPageText, recordSavedPage, deviceStore } from '../pages.js';
-import { parseFrontmatter, isDraft } from '../frontmatter.js';
-import { splitPage, composePage, setFields, setImages, setDraft, editedBody } from '../frontmatter-write.js';
+import { parseFrontmatter, isDraft, isTrue } from '../frontmatter.js';
+import { splitPage, composePage, setFields, setImages, setDraft, setList, setFlag, setBlock, editedBody } from '../frontmatter-write.js';
 import { watchBuild, buildStatusHtml, showBuildStatus, rememberCommit } from '../build-status.js';
-import { classifyPath, listTimeText, TYPE_LABELS } from '../pages-logic.js';
+import { classifyPath, pageType, listTimeText, TYPE_LABELS } from '../pages-logic.js';
+import { linkItems, linkProblem, LINKS_TEMPLATE_VERSION } from '../links.js';
+import { linksViewHtml, linkSheetHtml, linkListItems, previewLinks, firstLinkProblem, isLink } from './editor-links.js';
 import { toggleWrap, toggleLinePrefix, insertLink, createHistory, continueList } from '../editor-logic.js';
 import { getLocalEdit, saveLocalEdit, deleteLocalEdit } from '../edits.js';
 import { saveFile, pathExists, commitFiles, listFolder, getImageDataUrl, gitBlobSha, base64ToBytes, listBuildRuns } from '../github.js';
@@ -92,8 +94,11 @@ export async function editorScreen(container, [siteId, path]) {
         pendingImages = newPage.images ?? [];
     }
     const folder = imageFolder(path);
-    // A gallery page has a Photos view for its images: list (step 8).
-    const isGallery = kind.type === 'gallery';
+    // A gallery page has a Photos view for its images: list (step 8). A links page (skeleton: links, at
+    // any path) has a Links view for its links: list and its picture.
+    const type = pageType(path, parseFrontmatter(startText).data);
+    const isGallery = type === 'gallery';
+    const isLinks = type === 'links';
     const siteHref = `#/site/${encodeURIComponent(site.id)}`;
     const backHref = isNew ? siteHref : pageHref;
 
@@ -103,14 +108,18 @@ export async function editorScreen(container, [siteId, path]) {
     let fields;
     let gallery = []; // The images: list of a gallery page.
     let hasCover = false; // With a cover: key, the first photo is not the cover.
+    let links = []; // The links: list of a links page.
     const load = text => {
         parts = splitPage(text);
         const parsed = parseFrontmatter(text);
         frontmatterError = parsed.error;
         const value = key => (parsed.data[key] == null || typeof parsed.data[key] === 'object' ? '' : String(parsed.data[key]));
         fields = { title: value('title'), date: value('date'), description: value('description'), draft: isDraft(parsed.data) };
+        // A links page: the picture above the title, the sitemap switch and the CSS of the page.
+        if (isLinks) Object.assign(fields, { image: value('image'), image_alt: value('image_alt'), sitemap: isTrue(parsed.data.sitemap), css: value('css') });
         gallery = galleryItems(parsed.data);
         hasCover = Boolean(parsed.data.cover); // As the build: cover: false is no cover.
+        links = linkItems(parsed.data);
     };
     load(startText);
 
@@ -121,6 +130,7 @@ export async function editorScreen(container, [siteId, path]) {
         if (frontmatterError) return composePage({ ...parts, body: bodyText() });
         let raw = setDraft(setFields(parts.raw, fields), fields.draft);
         if (isGallery) raw = setImages(raw, gallery);
+        if (isLinks) raw = setBlock(setFlag(setList(raw, 'links', links), 'sitemap', fields.sitemap), 'css', fields.css);
         return composePage({ ...parts, raw, body: bodyText(), hasFrontmatter: parts.hasFrontmatter || raw !== '' });
     };
 
@@ -128,16 +138,17 @@ export async function editorScreen(container, [siteId, path]) {
 <div class="screen editor-screen" id="editor-screen">
     <header class="topbar editor-topbar">
         <a class="icon-btn icon-btn--plain" href="${backHref}" data-back aria-label="${isNew ? 'Back to the pages' : 'Back to the page'}">${icon('back', 22)}</a>
-        <div class="segmented${isGallery ? ' segmented--three' : ''}" role="group" aria-label="View">
+        <div class="segmented${isGallery || isLinks ? ' segmented--three' : ''}" role="group" aria-label="View">
             <button type="button" data-mode="write" aria-pressed="true">Write</button>
             ${isGallery ? '<button type="button" data-mode="photos" aria-pressed="false">Photos</button>' : ''}
+            ${isLinks ? '<button type="button" data-mode="links" aria-pressed="false">Links</button>' : ''}
             <button type="button" data-mode="preview" aria-pressed="false">Preview</button>
         </div>
         <button type="button" class="btn-publish" id="publish">Publish</button>
     </header>
     <div class="editor-head">
         <div class="editor-meta-row">
-            <span class="page-meta"><span class="type-label type-label--${kind.type}">${TYPE_LABELS[kind.type]}</span><span class="draft-label" id="draft-label" hidden>Draft</span></span>
+            <span class="page-meta"><span class="type-label type-label--${type}">${TYPE_LABELS[type]}</span><span class="draft-label" id="draft-label" hidden>Draft</span></span>
             <span class="editor-head-actions">
                 ${isNew ? '<button type="button" class="btn-small" id="open-delete-new" aria-haspopup="dialog">Delete</button>' : ''}
                 <button type="button" class="btn-small" id="open-details" aria-haspopup="dialog">${icon('details', 16)} Details</button>
@@ -146,6 +157,7 @@ export async function editorScreen(container, [siteId, path]) {
         <h1 class="editor-title" id="editor-title" tabindex="-1"></h1>
         <div class="muted small">${escapeHtml(siteAddress(path))}</div>
         <div class="banner" id="restore-banner" hidden></div>
+        ${isLinks && !(site.templateVersion >= LINKS_TEMPLATE_VERSION) ? `<div class="banner"><span>The site skips this links page until the site is upgraded to template version ${LINKS_TEMPLATE_VERSION}.</span><a class="text-link text-link--small" href="#/help/upgrade">How to upgrade the site</a></div>` : ''}
     </div>
     <div class="editor-body">
         <label class="visually-hidden" for="editor-text">Page text (Markdown)</label>
@@ -157,6 +169,7 @@ export async function editorScreen(container, [siteId, path]) {
             <ol class="photo-grid" id="photo-grid"></ol>
             <input type="file" id="photo-files" accept="image/*" multiple hidden>
         </div>` : ''}
+        ${isLinks ? linksViewHtml() : ''}
     </div>
     <p class="editor-status" id="editor-status" aria-live="polite"></p>
     <p class="build-status build-status--editor" id="build-status" aria-live="polite" hidden></p>
@@ -188,15 +201,27 @@ export async function editorScreen(container, [siteId, path]) {
                 <label for="field-title">Title</label>
                 <input class="input" id="field-title" type="text" required>
             </div>
-            <div class="field">
+            <div class="field"${isLinks ? ' hidden' : ''}>
                 <label for="field-date">Date</label>
                 <input class="input" id="field-date" type="date">
             </div>
             <div class="field">
                 <label for="field-description">Description</label>
                 <textarea class="input input-multiline" id="field-description" rows="3"></textarea>
-                <div class="field-hint">For search engines and the RSS feed.</div>
+                <div class="field-hint">${isLinks ? 'For search engines.' : 'For search engines and the RSS feed.'}</div>
             </div>
+            ${isLinks ? `<label class="switch-row" for="field-sitemap">
+                <input type="checkbox" id="field-sitemap">
+                <span class="switch-text">
+                    <span class="switch-title">Show in the sitemap</span>
+                    <span class="field-hint">Search engines find the page more easily. Off by default for a links page.</span>
+                </span>
+            </label>
+            <div class="field">
+                <label for="field-css">Page CSS</label>
+                <textarea class="input input-multiline input-code" id="field-css" rows="6" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off"></textarea>
+                <div class="field-hint">Optional. CSS for this page only. Preview does not show it.</div>
+            </div>` : ''}
             <label class="switch-row" for="field-draft">
                 <input type="checkbox" id="field-draft">
                 <span class="switch-text">
@@ -234,6 +259,8 @@ export async function editorScreen(container, [siteId, path]) {
             <button type="button" class="btn btn-secondary" data-close>Cancel</button>
         </form>
     </dialog>` : ''}
+
+    ${isLinks ? linkSheetHtml() : ''}
 
     <dialog class="sheet" id="conflict" aria-labelledby="conflict-title">
         <div class="sheet-body">
@@ -276,12 +303,13 @@ export async function editorScreen(container, [siteId, path]) {
     showTitle();
     let history = createHistory({ text: textarea.value, start: 0, end: 0 });
 
-    // Details and Photos change the front matter: they are off when the app cannot read it. Restore can
-    // load another text, so it runs this again.
+    // Details, Photos and Links change the front matter: they are off when the app cannot read it.
+    // Restore can load another text, so it runs this again.
     const FRONTMATTER_ERROR_TEXT = 'The app cannot read the front matter of this page. You can change the text. The front matter stays as it is.';
     const applyFrontmatterState = () => {
         $('#open-details').disabled = Boolean(frontmatterError);
         container.querySelector('[data-mode="photos"]')?.toggleAttribute('disabled', Boolean(frontmatterError));
+        container.querySelector('[data-mode="links"]')?.toggleAttribute('disabled', Boolean(frontmatterError));
     };
     applyFrontmatterState();
     if (frontmatterError) status(FRONTMATTER_ERROR_TEXT);
@@ -359,9 +387,10 @@ export async function editorScreen(container, [siteId, path]) {
             showTitle();
             history = createHistory({ text: textarea.value, start: 0, end: 0 });
             applyFrontmatterState();
-            // The Photos view is off for front matter that the app cannot read: show the text.
-            if (frontmatterError && photos && !photos.hidden) container.querySelector('[data-mode="write"]').click();
+            // The Photos and Links views are off for front matter that the app cannot read: show the text.
+            if (frontmatterError && ((photos && !photos.hidden) || (linksView && !linksView.hidden))) container.querySelector('[data-mode="write"]').click();
             if (photos && !photos.hidden) renderPhotos();
+            if (linksView && !linksView.hidden) renderLinks();
             banner.hidden = true;
             status(`Restored the changes from ${listTimeText(local.savedAt)}.${frontmatterError ? ` ${FRONTMATTER_ERROR_TEXT}` : ''}`);
         });
@@ -735,7 +764,171 @@ export async function editorScreen(container, [siteId, path]) {
         if (one && index !== -1 && !photoSheet.open) openPhoto(index);
     });
 
-    // ----- Write / Photos / Preview -----
+    // ----- Links of a links page (template version 3) -----
+    const linksView = $('#links-view');
+    const linkSheet = $('#link-sheet');
+    let linkIndex = -1; // The link in the sheet. -1: a new link.
+
+    // The picture above the title: a file of the site, or an address on another site (the app cannot
+    // show that one: the Content Security Policy allows images from the app and GitHub only).
+    const renderPicture = () => {
+        const picturePath = fields.image ? galleryImagePath(fields.image) : null;
+        const frame = $('#picture-frame');
+        frame.replaceChildren();
+        if (picturePath) {
+            const img = document.createElement('img');
+            img.alt = '';
+            img.addEventListener('error', () => img.remove(), { once: true });
+            imageUrl(picturePath).then(url => {
+                if (url && fields.image && galleryImagePath(fields.image) === picturePath) img.src = url;
+                else img.remove();
+            });
+            frame.append(img);
+        }
+        const notPublished = pendingImages.some(image => image.path === picturePath);
+        $('#picture-info').textContent = !fields.image
+            ? 'No picture. The picture shows above the title.'
+            : picturePath
+                ? `${fields.image.split('/').pop()}${notPublished ? ' (not published)' : ''}`
+                : `Picture from another address: ${fields.image}`;
+        $('#picture-change-text').textContent = fields.image ? 'Change picture' : 'Add picture';
+        $('#picture-remove').hidden = !fields.image;
+        $('#picture-alt-field').hidden = !fields.image;
+        $('#picture-alt').value = fields.image_alt;
+    };
+
+    const renderLinks = () => {
+        if (!linksView) return;
+        renderPicture();
+        $('#links-hint').textContent = links.length
+            ? `${links.length} ${links.length === 1 ? 'link' : 'links'}. The buttons show in this order. Tap a link to change it or its place.`
+            : 'This page has no links. Tap Add link.';
+        $('#link-list').replaceChildren(...linkListItems(links, openLink));
+    };
+    const linksChanged = () => {
+        renderLinks();
+        keepSoon();
+    };
+
+    $('#picture-alt')?.addEventListener('input', event => {
+        fields.image_alt = event.target.value;
+        keepSoon();
+    });
+    $('#picture-remove')?.addEventListener('click', () => {
+        fields.image = '';
+        fields.image_alt = '';
+        linksChanged();
+        status('The picture is removed from the page. The image file stays in the repository.');
+        $('#picture-change').focus();
+    });
+    $('#picture-change')?.addEventListener('click', () => {
+        if (publishing) {
+            status('Wait until Publish is complete, then change the picture.');
+            return;
+        }
+        if (preparing) return;
+        $('#picture-file').click();
+    });
+    $('#picture-file')?.addEventListener('change', async () => {
+        const input = $('#picture-file');
+        const file = input.files[0];
+        input.value = '';
+        if (!file) return;
+        preparing = true;
+        status('Making the picture ready.');
+        try {
+            const prepared = await prepareImage(file);
+            githubNames = await namesOnGitHub();
+            const repoPath = folder + freeName(file.name, prepared.extension);
+            pendingImages = [...pendingImages, { path: repoPath, base64: prepared.base64, mimeType: prepared.mimeType }];
+            fields.image = markdownPath(repoPath);
+        } catch (err) {
+            status(err instanceof ImageError ? err.message : 'The app cannot read this image. Use a JPEG or PNG.');
+            return;
+        } finally {
+            preparing = false;
+        }
+        await keepNow(); // Keep the picture on the device at once.
+        if (!linksView.isConnected) return; // The user left the editor. The picture is kept.
+        renderLinks();
+        status('Added the picture. Type the alt text below the picture.');
+        $('#picture-alt').focus();
+    });
+
+    // The sheet for one link: button text, address, place, remove. Apply checks the link as the build does.
+    const fillLinkSheet = () => {
+        const isNewLink = linkIndex === -1;
+        const item = isNewLink ? {} : links[linkIndex];
+        const editable = isLink(item);
+        $('#link-sheet-title').textContent = isNewLink ? 'New link' : `Link ${linkIndex + 1} of ${links.length}`;
+        $('#link-note').hidden = editable;
+        $('#link-note').textContent = editable ? '' : `This item is not a link: ${String(item)}`;
+        $('#link-text').value = editable ? textOf(item.text) : '';
+        $('#link-url').value = editable ? textOf(item.url) : '';
+        $('#link-text').disabled = !editable;
+        $('#link-url').disabled = !editable;
+        $('#link-apply').hidden = !editable;
+        $('#link-error').textContent = '';
+        $('#link-move').hidden = isNewLink;
+        $('#link-remove').hidden = isNewLink;
+        updateLinkMoves();
+    };
+    const updateLinkMoves = () => {
+        $('#link-earlier').disabled = linkIndex <= 0;
+        $('#link-later').disabled = linkIndex === -1 || linkIndex === links.length - 1;
+    };
+    const openLink = index => {
+        linkIndex = index;
+        fillLinkSheet();
+        linkSheet.showModal();
+    };
+    linkSheet?.querySelector('[data-close]').addEventListener('click', () => linkSheet.close());
+    $('#add-link')?.addEventListener('click', () => {
+        openLink(-1);
+        $('#link-text').focus();
+    });
+    $('#link-form')?.addEventListener('submit', event => {
+        event.preventDefault();
+        const item = linkIndex === -1 ? {} : links[linkIndex];
+        if (!isLink(item)) return;
+        const typed = { text: $('#link-text').value.replace(/\s+/g, ' ').trim(), url: $('#link-url').value.trim() };
+        const problem = linkProblem(typed);
+        if (problem) {
+            $('#link-error').textContent = problem;
+            $(typed.text ? '#link-url' : '#link-text').focus();
+            return;
+        }
+        // Values that did not change keep their exact text. Other keys of the item stay.
+        const changed = { ...item };
+        for (const key of ['text', 'url']) if (typed[key] !== textOf(item[key]).trim()) changed[key] = typed[key];
+        links = linkIndex === -1 ? [...links, changed] : links.map((other, index) => (index === linkIndex ? changed : other));
+        linkSheet.close();
+        linksChanged();
+    });
+    // A move keeps what the user typed in the sheet. Apply puts it in the link.
+    for (const [id, step] of [['#link-earlier', -1], ['#link-later', 1]]) {
+        $(id)?.addEventListener('click', () => {
+            links = moveItem(links, linkIndex, linkIndex + step);
+            linkIndex += step;
+            $('#link-sheet-title').textContent = `Link ${linkIndex + 1} of ${links.length}`;
+            updateLinkMoves();
+            linksChanged();
+            // At the first or last place this button is off: keep the focus in the sheet.
+            if ($(id).disabled) $(step < 0 ? '#link-later' : '#link-earlier').focus();
+        });
+    }
+    $('#link-remove')?.addEventListener('click', () => {
+        const removed = linkIndex;
+        links = links.filter((_, index) => index !== removed);
+        linkSheet.close();
+        linksChanged();
+        status('The link is removed.');
+        // The row that opened the sheet is gone: put the focus on the link now in its place.
+        const rows = container.querySelectorAll('.link-row');
+        (rows[Math.min(removed, rows.length - 1)] ?? $('#add-link')).focus();
+    });
+
+    // ----- Write / Photos / Links / Preview -----
     for (const button of container.querySelectorAll('[data-mode]')) {
         button.addEventListener('click', () => {
             const mode = button.dataset.mode;
@@ -770,13 +963,33 @@ export async function editorScreen(container, [siteId, path]) {
                     }
                     preview.append(grid);
                 }
+                // A links page: the picture before the text and the buttons after it, as on the site.
+                // The css: of the page does not show: the Content Security Policy allows only the app styles.
+                if (isLinks) {
+                    const picturePath = fields.image ? galleryImagePath(fields.image) : null;
+                    if (picturePath) {
+                        const img = document.createElement('img');
+                        img.className = 'preview-links-picture';
+                        img.alt = fields.image_alt;
+                        img.dataset.imagePath = picturePath;
+                        preview.prepend(img);
+                    } else if (fields.image) {
+                        const note = document.createElement('span');
+                        note.className = 'preview-image';
+                        note.textContent = `Picture: ${fields.image_alt || '(no alt text)'} (${fields.image}). The app cannot show a picture from another address.`;
+                        preview.prepend(note);
+                    }
+                    preview.append(previewLinks(links));
+                }
                 showImages();
             }
             if (mode === 'photos') renderPhotos();
+            if (mode === 'links') renderLinks();
             preview.hidden = mode !== 'preview';
             textarea.hidden = mode !== 'write';
             $('.editor-toolbar').hidden = mode !== 'write';
             if (photos) photos.hidden = mode !== 'photos';
+            if (linksView) linksView.hidden = mode !== 'links';
         });
     }
 
@@ -797,6 +1010,10 @@ export async function editorScreen(container, [siteId, path]) {
         $('#field-date').value = /^\d{4}-\d{2}-\d{2}$/.test(fields.date) ? fields.date : '';
         $('#field-description').value = fields.description;
         $('#field-draft').checked = fields.draft;
+        if (isLinks) {
+            $('#field-sitemap').checked = fields.sitemap;
+            $('#field-css').value = fields.css;
+        }
         $('#details-error').textContent = '';
         dateTouched = false;
         details.showModal();
@@ -812,11 +1029,13 @@ export async function editorScreen(container, [siteId, path]) {
         const typedDescription = $('#field-description').value.trim();
         // Values that did not change keep their exact text, so their lines in the file do not change.
         fields = {
+            ...fields,
             title: typedTitle === fields.title.trim() ? fields.title : typedTitle,
             date: dateTouched ? $('#field-date').value : fields.date,
             description: typedDescription === fields.description.trim() ? fields.description : typedDescription,
             draft: $('#field-draft').checked
         };
+        if (isLinks) Object.assign(fields, { sitemap: $('#field-sitemap').checked, css: $('#field-css').value });
         showTitle();
         details.close();
         keepNow();
@@ -849,8 +1068,9 @@ export async function editorScreen(container, [siteId, path]) {
             const taken = [...onGitHub.map(file => file.name), ...namesInText(currentText(), folder), ...pendingNames()];
             const name = imageName(oldName, oldName.split('.').pop(), taken);
             textarea.value = replaceImagePath(textarea.value, markdownPath(image.path), markdownPath(folder + name));
-            // A gallery photo: its path in the images: list changes too.
+            // A gallery photo: its path in the images: list changes too. The picture of a links page too.
             gallery = gallery.map(item => (isPhoto(item) && galleryImagePath(item.path) === image.path ? { ...item, path: markdownPath(folder + name) } : item));
+            if (isLinks && fields.image && galleryImagePath(fields.image) === image.path) fields.image = markdownPath(folder + name);
             image.path = folder + name;
             notes.push(`A file with the name ${oldName} exists on GitHub, so the app changed the image name to ${name}.`);
         }
@@ -897,6 +1117,12 @@ export async function editorScreen(container, [siteId, path]) {
         }
         if (preparing) {
             status('Wait until the image is ready, then tap Publish.');
+            return;
+        }
+        // The build skips a link that is not valid, without an error: the user must correct it first.
+        const linkError = isLinks && !frontmatterError ? firstLinkProblem(links) : null;
+        if (linkError) {
+            status(`Not published. ${linkError} Tap Links and correct the link.`);
             return;
         }
         if (currentText() === originalText) {
@@ -948,6 +1174,7 @@ export async function editorScreen(container, [siteId, path]) {
                 for (const image of images) imageUrls.set(image.path, Promise.resolve(dataUrl(image)));
                 pendingImages = pendingImages.filter(image => !images.includes(image));
                 if (photos && !photos.hidden) renderPhotos(); // The "Not published" marks go away.
+                if (linksView && !linksView.hidden) renderLinks();
             } else {
                 saved = await saveFile({
                     owner: site.owner,
