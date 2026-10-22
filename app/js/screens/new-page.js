@@ -6,7 +6,8 @@ import { getSite } from '../sites.js';
 import { deviceStore } from '../pages.js';
 import { listNewPages, saveLocalEdit } from '../edits.js';
 import { pathExists } from '../github.js';
-import { NEW_PAGE_TYPES, slugify, slugProblem, pagePath, localDate, newPageText } from '../new-page.js';
+import { newPageTypes, slugify, slugProblem, pagePath, localDate, newPageText } from '../new-page.js';
+import { LINKS_TEMPLATE_VERSION } from '../links.js';
 import { icon } from '../dom.js';
 import { back, navigate } from '../router.js';
 
@@ -24,6 +25,8 @@ export async function newPageScreen(container, [siteId]) {
     const list = await deviceStore.getPageList(site.id).catch(() => null);
     const newPages = await listNewPages(site.id).catch(() => []);
     const existingPaths = [...(list?.pages ?? []).map(page => page.path), ...newPages.map(edit => edit.path)];
+    const types = newPageTypes(site.templateVersion);
+    const canMakeLinks = types.some(t => t.type === 'links');
 
     container.innerHTML = `
 <div class="screen">
@@ -35,11 +38,12 @@ export async function newPageScreen(container, [siteId]) {
         <fieldset class="field type-choice">
             <legend>Type</legend>
             <div class="type-options">
-                ${NEW_PAGE_TYPES.map((t, i) => `<label class="type-option">
+                ${types.map((t, i) => `<label class="type-option">
                     <input type="radio" name="type" value="${t.type}"${i === 0 ? ' checked' : ''}>
                     <span>${t.label}</span>
                 </label>`).join('')}
             </div>
+            ${canMakeLinks ? '' : `<p class="field-hint">To make a links page, upgrade the site to template version ${LINKS_TEMPLATE_VERSION}. <a class="text-link text-link--small" href="#/help/upgrade">How to upgrade the site</a></p>`}
         </fieldset>
         <div class="field">
             <label for="new-title">Title</label>

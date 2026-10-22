@@ -1,11 +1,17 @@
 // Rules for a new page (mvp-plan section 5 "Add"), without network or storage, so they run in tests.
 import { setFields, composePage } from './frontmatter-write.js';
+import { LINKS_TEMPLATE_VERSION } from './links.js';
 
+// minTemplate: the template version that the type needs. An older build skips the page.
 export const NEW_PAGE_TYPES = [
     { type: 'blog', label: 'Blog post' },
     { type: 'page', label: 'Page' },
-    { type: 'gallery', label: 'Gallery' }
+    { type: 'gallery', label: 'Gallery' },
+    { type: 'links', label: 'Links page', minTemplate: LINKS_TEMPLATE_VERSION }
 ];
+
+// The types that a site with this template version can build (decision 27).
+export const newPageTypes = templateVersion => NEW_PAGE_TYPES.filter(t => !t.minTemplate || templateVersion >= t.minTemplate);
 
 const MAX_SLUG_LENGTH = 60;
 
@@ -31,7 +37,8 @@ export function slugify(title) {
     return slug;
 }
 
-// The file of a new page (vanilla-gorilla-notes): blog and gallery have their folders.
+// The file of a new page (vanilla-gorilla-notes): blog and gallery have their folders. A links page
+// is at the address of a page (decision 28).
 export function pagePath(type, slug) {
     if (type === 'blog') return `src/blog/${slug}/index.md`;
     if (type === 'gallery') return `src/gallery/${slug}/index.md`;
@@ -46,6 +53,7 @@ const RESERVED = {
     blog: new Set(['page', 'author']),
     gallery: new Set(['page'])
 };
+RESERVED.links = RESERVED.page;
 
 // The reason why the address cannot be used, or null.
 export function slugProblem(slug, { type, existingPaths = [] }) {
@@ -64,7 +72,8 @@ export function localDate(date = new Date()) {
 }
 
 // The text of a new page: title, date, description (when typed) and skeleton, then an empty body.
+// A links page has no date: the links skeleton does not show one.
 export function newPageText({ title, date, description, type }) {
-    const raw = `${setFields('', { title, date, description })}\nskeleton: ${type}`;
+    const raw = `${setFields('', { title, date: type === 'links' ? '' : date, description })}\nskeleton: ${type}`;
     return composePage({ hasFrontmatter: true, raw, body: '\n', eol: '\n' });
 }
