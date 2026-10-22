@@ -1,11 +1,11 @@
 // Rules for the page list, without network or storage, so they run in tests.
 import { isDraft } from './frontmatter.js';
 
-export const TYPE_LABELS = { blog: 'Blog', page: 'Page', gallery: 'Gallery' };
+export const TYPE_LABELS = { blog: 'Blog', page: 'Page', gallery: 'Gallery', links: 'Links page' };
 
 // The type and slug of a Markdown file, from its path (as build.js does). null when the file is not a page.
 // src/blog/<slug>/index.md → blog, src/gallery/<slug>/index.md → gallery, every other src/**/*.md → page.
-// The "skeleton" field does not change the type.
+// The "skeleton" field does not change this type; pageType adds the links type.
 export function classifyPath(path) {
     const match = String(path).match(/^src\/(.+)\.md$/);
     if (!match) return null;
@@ -19,9 +19,16 @@ export function classifyPath(path) {
     return { type: 'page', slug: slugParts.join('/') };
 }
 
+// The type of a page from its path and front matter. A page with "skeleton: links" is a links page at
+// any path (build.js isLinksPage, template version 3, decision 28).
+export function pageType(path, data) {
+    return data?.skeleton === 'links' ? 'links' : classifyPath(path).type;
+}
+
 // The list entry for one page, from its path, blob SHA and parsed front matter.
 export function pageSummary(path, sha, { data, error }) {
-    const { type, slug } = classifyPath(path);
+    const { slug } = classifyPath(path);
+    const type = pageType(path, data);
     const title = typeof data.title === 'string' || typeof data.title === 'number' ? String(data.title).trim() : '';
     const date = typeof data.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.date) ? data.date : null;
     return {
@@ -33,6 +40,7 @@ export function pageSummary(path, sha, { data, error }) {
         date,
         draft: isDraft(data),
         imageCount: Array.isArray(data.images) ? data.images.length : 0,
+        linkCount: Array.isArray(data.links) ? data.links.length : 0,
         error
     };
 }
@@ -47,7 +55,7 @@ export function sortPages(pages) {
     });
 }
 
-// type: 'all', 'blog', 'page', 'gallery' or 'draft' (the drafts of all types). query: text to find
+// type: 'all', 'blog', 'page', 'gallery', 'links' or 'draft' (the drafts of all types). query: text to find
 // in the title or the slug.
 export function filterPages(pages, { type = 'all', query = '' } = {}) {
     const text = query.trim().toLowerCase();

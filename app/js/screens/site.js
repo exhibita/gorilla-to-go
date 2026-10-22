@@ -7,7 +7,8 @@ import { getSite, listSites, removeSite, setLastSiteId, updateSite } from '../si
 import { loadPages, deviceStore } from '../pages.js';
 import { listNewPages } from '../edits.js';
 import { parseFrontmatter } from '../frontmatter.js';
-import { classifyPath, filterPages, formatDate, listTimeText, sortPages, TYPE_LABELS } from '../pages-logic.js';
+import { classifyPath, filterPages, formatDate, listTimeText, pageType, sortPages, TYPE_LABELS } from '../pages-logic.js';
+import { LINKS_TEMPLATE_VERSION } from '../links.js';
 import { escapeHtml, icon } from '../dom.js';
 import { navigate } from '../router.js';
 import { themeToggleHtml, bindThemeToggles } from '../theme.js';
@@ -18,6 +19,7 @@ const FILTERS = [
     { type: 'blog', label: 'Blog' },
     { type: 'page', label: 'Pages' },
     { type: 'gallery', label: 'Galleries' },
+    { type: 'links', label: 'Links', minTemplate: LINKS_TEMPLATE_VERSION },
     { type: 'draft', label: 'Drafts' }
 ];
 
@@ -31,7 +33,7 @@ const lastLists = new Map();
 export const forgetList = siteId => lastLists.delete(siteId);
 
 
-// Type label, Draft label, date and image count of a page.
+// Type label, Draft label, date, and the image count of a gallery or the link count of a links page.
 export function pageMetaHtml(page) {
     const parts = [`<span class="type-label type-label--${page.type}">${TYPE_LABELS[page.type]}</span>`];
     if (page.draft) parts.push('<span class="draft-label">Draft</span>');
@@ -39,6 +41,7 @@ export function pageMetaHtml(page) {
     if (page.error) parts.push('<span class="error-label">Front matter error</span>');
     if (page.date) parts.push(`<span>${escapeHtml(formatDate(page.date))}</span>`);
     if (page.type === 'gallery') parts.push(`<span>${page.imageCount} ${page.imageCount === 1 ? 'image' : 'images'}</span>`);
+    if (page.type === 'links') parts.push(`<span>${page.linkCount ?? 0} ${page.linkCount === 1 ? 'link' : 'links'}</span>`);
     return parts.join('');
 }
 
@@ -106,7 +109,7 @@ export async function siteScreen(container, [id]) {
             <input type="search" id="search" placeholder="Search pages" aria-label="Search pages" autocomplete="off" value="${escapeHtml(view.query)}">
         </label>
         <div class="filters" role="group" aria-label="Page type">
-            ${FILTERS.map(f => `<button type="button" class="filter" data-type="${f.type}" aria-pressed="${view.type === f.type}">${f.label}</button>`).join('')}
+            ${FILTERS.filter(f => !f.minTemplate || site.templateVersion >= f.minTemplate || view.type === f.type).map(f => `<button type="button" class="filter" data-type="${f.type}" aria-pressed="${view.type === f.type}">${f.label}</button>`).join('')}
         </div>
         <div class="list-meta">
             <span class="muted small" id="list-status" aria-live="polite"></span>
@@ -325,10 +328,12 @@ export async function siteScreen(container, [id]) {
         if (controller.signal.aborted || newPages.length === 0) return;
         $('#new-page-list').innerHTML = newPages.map(edit => {
             const kind = classifyPath(edit.path);
-            const title = parseFrontmatter(edit.text).data.title || kind.slug;
+            const { data } = parseFrontmatter(edit.text);
+            const type = pageType(edit.path, data);
+            const title = data.title || kind.slug;
             return `<li><a class="page-card" href="#/site/${encodeURIComponent(site.id)}/edit/${encodeURIComponent(edit.path)}">
                 <span class="page-card-text">
-                    <span class="page-meta"><span class="type-label type-label--${kind.type}">${TYPE_LABELS[kind.type]}</span><span class="draft-label">Not published</span></span>
+                    <span class="page-meta"><span class="type-label type-label--${type}">${TYPE_LABELS[type]}</span><span class="draft-label">Not published</span></span>
                     <span class="page-card-title">${escapeHtml(String(title))}</span>
                 </span>${icon('chevronRight', 18)}</a></li>`;
         }).join('');

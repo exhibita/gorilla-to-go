@@ -10,7 +10,7 @@ import * as db from './db.js';
 const MAX_PARALLEL_REQUESTS = 6;
 
 // Change this number when pageSummary changes, so saved summaries are made again from the saved text.
-const SUMMARY_VERSION = 1;
+const SUMMARY_VERSION = 2;
 
 // The IndexedDB store. Stores: "pageLists" (key siteId), "blobs" (key sha).
 export const deviceStore = {
