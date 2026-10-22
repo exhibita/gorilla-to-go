@@ -52,6 +52,7 @@ const ASSETS = [
     'js/pages.js',
     'js/router.js',
     'js/sanitize.js',
+    'js/site-look.js',
     'js/screens/about.js',
     'js/screens/add-site.js',
     'js/screens/editor-links.js',
