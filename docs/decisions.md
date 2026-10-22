@@ -13,7 +13,7 @@ All decisions were made on 2026-10-17 unless a different date is shown.
 | 7 | The MVP must manage many sites. |
 | 8 | Sites must run the required Vanilla Gorilla template version to use the app. Existing sites will be upgraded. |
 | 9 | Store the template version in `package.json` (`"vanillaGorilla": { "templateVersion": 2 }`), not in `config.json`. |
-| 10 | The Link Tree page type is renamed **Links**. Its label is **Links page**. The links are stored as a list in frontmatter. App support comes after the MVP. |
+| 10 | The Link Tree page type is renamed **Links**. Its label is **Links page**. The links are stored as a list in frontmatter. App support comes after the MVP (added in 0.14.0 on 2026-10-21, decisions 27–30). |
 | 11 | Light and dark themes. The default follows the device. The user can change it with a toggle. |
 | 12 | The light theme uses the vg.exhibita.com colors. |
 | 13 | Show a welcome screen until the user adds the first site. |
@@ -30,6 +30,10 @@ All decisions were made on 2026-10-17 unless a different date is shown.
 | 24 | The repository `exhibita/gorilla-to-go` is public. A GitHub Actions workflow deploys the `app/` folder to GitHub Pages on each push to `main` (decision 18, `docs/hosting.md`). |
 | 25 | The editor Preview uses a copy of `marked` (MIT), the Markdown renderer that `build.js` uses, kept inside the app and served from the app itself, so the preview renders the same as the site. Use the version the template uses (18.0.6 on 2026-10-18), and update it when the template changes. |
 | 26 | A new page is committed only when the user taps Publish, not when it is created. Until then it is kept on the device and shows as "Not published" in the Pages list. Reason: each commit to `main` deploys the site, so an empty page must not go live. Publish creates the file without a SHA, so GitHub refuses it when the file exists. This changes "Add … commits it" in mvp-plan section 5. |
+| 27 | (2026-10-21) Links pages need Vanilla Gorilla template version 3. The required version for the app stays 2: a site on version 2 keeps working, but GTG offers the Links page type only when the site's `templateVersion` is 3 or higher. Otherwise the New page screen links to the upgrade page. |
+| 28 | (2026-10-21) GTG makes a new links page at `src/<slug>/index.md`, as a page. A page with `skeleton: links` is a links page at any path, as `build.js` reads it. |
+| 29 | (2026-10-21) GTG edits these keys of a links page: `title`, `description`, `draft`, the `links:` list (`url` and `text`), the picture (`image`, `image_alt`), `sitemap` and the page `css`. |
+| 30 | (2026-10-21) A link address must be a full URL with `http:`, `https:`, `mailto:`, `tel:` or `sms:`, as in `build.js`. GTG does not add `https://`: the user types the full address. |
 
 ## Notes
 
