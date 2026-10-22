@@ -2,6 +2,13 @@
 
 The newest version is first. Each version has the date when it went live.
 
+## 0.15.0 — 2026-10-22
+
+- The Preview shows your page in the colours and fonts of your site, also when the app uses the dark theme. This works for blog posts, pages, galleries and links pages.
+- The Preview shows the title of the page at the top, as on the site.
+- The app reads the look from the site's style.css the first time you open Preview, and keeps it on the device for offline use.
+- A font that the app does not have shows as the next font in your site's font list.
+
 ## 0.14.0 — 2026-10-21
 
 - Links pages: a page of link buttons, for example for a social media profile. The site needs Vanilla Gorilla template version 3.

@@ -34,6 +34,7 @@ All decisions were made on 2026-10-17 unless a different date is shown.
 | 28 | (2026-10-21) GTG makes a new links page at `src/<slug>/index.md`, as a page. A page with `skeleton: links` is a links page at any path, as `build.js` reads it. |
 | 29 | (2026-10-21) GTG edits these keys of a links page: `title`, `description`, `draft`, the `links:` list (`url` and `text`), the picture (`image`, `image_alt`), `sitemap` and the page `css`. |
 | 30 | (2026-10-21) A link address must be a full URL with `http:`, `https:`, `mailto:`, `tel:` or `sms:`, as in `build.js`. GTG does not add `https://`: the user types the full address. |
+| 31 | (2026-10-22) The editor Preview shows the look of the site, not the app theme, for all page types. GTG reads the colours, fonts and radius from the site's `src/css/style.css` (the rules for `body`, `h1`, `a`, `.link-button` and `.btn-primary` first, then the token names, then the template look) and keeps them on the site record. The app cannot load the site stylesheet or its web fonts (CSP), so a font that the app does not have falls back to the next font in the site's list. The `css:` of a links page does not show. |
 
 ## Notes
 

@@ -815,7 +815,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .link-row-url { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 /* As the template: the picture is at most a third of --links-min-width (360px), centered. More specific
    than .editor-preview img, also while the image loads. */
-.editor-preview .preview-links-picture, .editor-preview .preview-links-picture:not([src]) { width: 100%; max-width: 120px; min-height: 0; margin: 0 auto 20px; border-radius: 0; }
+.editor-preview .preview-links-picture, .editor-preview .preview-links-picture:not([src]) { width: 100%; max-width: 120px; min-height: 0; margin: 0 auto 20px; }
 .preview-links { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 .preview-link-button { display: block; padding: 12px 16px; border-radius: var(--radius); background: var(--primary); color: var(--on-primary); font-weight: 600; text-align: center; overflow-wrap: anywhere; }
 .input-code { font-family: ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace; font-size: 16px; }
@@ -885,3 +885,26 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 .version-link:hover::after, .version-link:focus-visible::after { opacity: 1; }
 @media (hover: none) { .version-link::after { display: none; } }
+
+/* ---------- Preview in the look of the site (site-look.js, decision 31) ----------
+   The editor sets the --site-* properties on #preview. Every rule of the Preview that uses an app
+   colour has a site version here, so the Preview does not follow the app theme. */
+.editor-preview.site-look { background: var(--site-bg); color: var(--site-text); font-family: var(--site-font-body); }
+/* A blog post is on the surface card of the site (article.post). A see-through surface shows the background. */
+.editor-preview.site-look.preview--blog { background: linear-gradient(var(--site-surface), var(--site-surface)), var(--site-bg); }
+.site-look h1, .site-look h2, .site-look h3, .site-look h4 { font-family: var(--site-font-heading); font-weight: 700; line-height: 1.25; color: var(--site-heading); }
+.site-look h1 { margin: 0 0 16px; font-size: 28px; }
+.site-look a { color: var(--site-link); }
+.site-look blockquote { border-left-color: var(--site-link); color: var(--site-muted); }
+.site-look img { border-radius: var(--site-radius); }
+.site-look img:not([src]) { background: rgba(0, 0, 0, 0.06); }
+.site-look .preview-image { border-color: var(--site-border); color: var(--site-muted); }
+.site-look code, .site-look pre, .site-look th { background: rgba(0, 0, 0, 0.06); }
+.site-look pre code { background: none; }
+.site-look th, .site-look td { border-color: var(--site-border); }
+.site-look hr { border-top-color: var(--site-border); }
+.site-look .preview-gallery figcaption { color: var(--site-muted); }
+.site-look .preview-link-button { background: var(--site-button); color: var(--site-button-text); border: 1px solid var(--site-button-border); border-radius: var(--site-radius); font-weight: 500; }
+/* A links page: everything is centered, and the text is muted (.links-page). */
+.site-look.preview--links { text-align: center; }
+.site-look.preview--links .preview-body { color: var(--site-muted); }
