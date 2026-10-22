@@ -4,7 +4,7 @@
 // the user opened, so a newer change on GitHub stops the save (mvp-plan section 9).
 import { marked } from '../../vendor/marked/marked.esm.js';
 import { getToken } from '../auth.js';
-import { getSite } from '../sites.js';
+import { getSite, updateSite } from '../sites.js';
 import { getPageText, recordSavedPage, deviceStore } from '../pages.js';
 import { parseFrontmatter, isDraft, isTrue } from '../frontmatter.js';
 import { splitPage, composePage, setFields, setImages, setDraft, setList, setFlag, setBlock, editedBody } from '../frontmatter-write.js';
@@ -14,10 +14,11 @@ import { linkItems, linkProblem, LINKS_TEMPLATE_VERSION } from '../links.js';
 import { linksViewHtml, linkSheetHtml, linkListItems, previewLinks, firstLinkProblem, isLink } from './editor-links.js';
 import { toggleWrap, toggleLinePrefix, insertLink, createHistory, continueList } from '../editor-logic.js';
 import { getLocalEdit, saveLocalEdit, deleteLocalEdit } from '../edits.js';
-import { saveFile, pathExists, commitFiles, listFolder, getImageDataUrl, gitBlobSha, base64ToBytes, listBuildRuns } from '../github.js';
+import { saveFile, pathExists, commitFiles, listFolder, getImageDataUrl, getSiteCss, gitBlobSha, base64ToBytes, listBuildRuns } from '../github.js';
 import { imageFolder, imageName, markdownPath, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, galleryItems, galleryImagePath, moveItem } from '../images.js';
 import { prepareImage, ImageError } from '../image-resize.js';
 import { sanitizeHtml } from '../sanitize.js';
+import { siteLook, TEMPLATE_LOOK, LOOK_KEYS } from '../site-look.js';
 import { escapeHtml, icon } from '../dom.js';
 import { back, navigate } from '../router.js';
 
@@ -929,14 +930,46 @@ export async function editorScreen(container, [siteId, path]) {
         (rows[Math.min(removed, rows.length - 1)] ?? $('#add-link')).focus();
     });
 
+    // ----- The look of the site in the Preview (decision 31) -----
+    // The colours and fonts of the site, not of the app theme: the look kept on the device, else the
+    // template look. The first Preview of each visit reads src/css/style.css again; a changed look is
+    // kept and shown. The values were checked by siteLook, and CSSOM is allowed by the CSP.
+    let look = { ...TEMPLATE_LOOK, ...Object.fromEntries(LOOK_KEYS.filter(key => typeof site.look?.[key] === 'string').map(key => [key, site.look[key]])) };
+    let lookRead = false;
+    const showLook = () => {
+        preview.classList.add('site-look', `preview--${type}`);
+        for (const key of LOOK_KEYS) preview.style.setProperty(`--site-${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`, look[key]);
+        if (lookRead) return;
+        lookRead = true;
+        getSiteCss({ owner: site.owner, repo: site.repo, branch: site.branch, token, signal: controller.signal })
+            .then(async css => {
+                if (css === null) return; // For example offline: the kept look stays.
+                const fresh = siteLook(css);
+                if (LOOK_KEYS.every(key => fresh[key] === look[key])) return;
+                look = fresh;
+                showLook();
+                // Read the site again first: the Pages list can have changed it (templateVersion).
+                const current = await getSite(site.id);
+                if (current) await updateSite({ ...current, look: fresh });
+            })
+            .catch(() => {});
+    };
+
     // ----- Write / Photos / Links / Preview -----
     for (const button of container.querySelectorAll('[data-mode]')) {
         button.addEventListener('click', () => {
             const mode = button.dataset.mode;
             for (const other of container.querySelectorAll('[data-mode]')) other.setAttribute('aria-pressed', String(other === button));
             if (mode === 'preview') {
-                // The same renderer and options as build.js: marked.parse(body) (decision 25).
-                preview.replaceChildren(sanitizeHtml(marked.parse(textarea.value)));
+                // The title, as the skeletons show it, then the text. The same renderer and options as
+                // build.js: marked.parse(body) (decision 25).
+                const title = document.createElement('h1');
+                title.textContent = (frontmatterError ? '' : fields.title) || kind.slug;
+                const text = document.createElement('div');
+                text.className = 'preview-body';
+                text.append(sanitizeHtml(marked.parse(textarea.value)));
+                preview.replaceChildren(title, text);
+                showLook();
                 // A gallery page: the photos follow the text, as on the site.
                 if (isGallery && gallery.length) {
                     const grid = document.createElement('div');

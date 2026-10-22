@@ -68,6 +68,14 @@ The Links page colors have a contrast of 6.8:1 (light) and 7.6:1 (dark).
 - A gallery has a third view, Photos. A links page has a third view, Links: the picture (with its alt text) at the top, then one row per link with the button text and the address. A tap on a row opens a bottom sheet: button text, address, Move earlier, Move later, Remove. "Add link" is below the list.
 - Details of a links page: no date. It adds the "Show in the sitemap" switch and the Page CSS field.
 
+## Preview
+
+- The Preview box shows the page in the look of the site (decision 31): background, text, headings, links, buttons, fonts and radius come from the site's `src/css/style.css`. The rest of the editor follows the app theme, so the Preview reads as a window onto the site.
+- The Preview starts with the title of the page as a heading, as the skeletons do.
+- A blog post is on the surface colour of the site (the `article.post` card). Other pages are on the background colour.
+- A links page is centered, with the picture, the title, the text in the muted colour, and the buttons.
+- Before the app has read the site (for example the first time, offline), the Preview uses the template look.
+
 ## Launch screen
 
 The web app manifest controls the launch screen. Set `background_color` to `#f8f6f2` and use the VG logo as the app icon.
