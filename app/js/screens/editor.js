@@ -338,13 +338,15 @@ export async function editorScreen(container, [siteId, path]) {
     // While the Restore choice shows, nothing is kept: the earlier changes must stay until the user
     // taps Restore or Discard.
     let restorePending = false;
+    // Returns true only when the text and its images are saved on the device.
     const keepNow = async () => {
         clearTimeout(keepTimer);
-        if (restorePending || isDeleted) return;
+        if (restorePending || isDeleted) return false;
         const text = currentText();
         try {
             if (text === originalText) {
                 await deleteLocalEdit(site.id, path);
+                return false;
             } else {
                 // Only the photos that the text still uses are kept.
                 const images = referencedImages(text, pendingImages);
@@ -355,12 +357,14 @@ export async function editorScreen(container, [siteId, path]) {
                     if (!images.length) throw err;
                     await saveLocalEdit({ siteId: site.id, path, baseSha, text });
                     status('The app cannot keep the images on this device. Your text is kept. Publish soon.');
-                    return;
+                    return false;
                 }
                 status(`Not published. Your changes are kept on this device (${listTimeText(Date.now())}).`);
+                return true;
             }
         } catch {
             status('The app cannot keep your changes on this device. Publish soon.');
+            return false;
         }
     };
     const keepSoon = () => {
@@ -729,7 +733,7 @@ export async function editorScreen(container, [siteId, path]) {
         $('#photo-files').click();
     });
     // Make the photos ready and add them to the gallery. A photo from the inbox has an origin: its
-    // path and SHA in the inbox. Returns the number of photos added.
+    // path and SHA in the inbox. Returns the number added and whether they are kept on the device.
     const addPhotoFiles = async (files, origins = []) => {
         preparing = true;
         const problems = [];
@@ -758,15 +762,15 @@ export async function editorScreen(container, [siteId, path]) {
         } finally {
             preparing = false;
         }
-        if (added) await keepNow();
-        if (!photos.isConnected) return added; // The user left the editor. The photos are kept.
+        const kept = added ? await keepNow() : false;
+        if (!photos.isConnected) return { added, kept }; // The user left the editor. The photos are kept.
         const one = added === 1 && files.length === 1;
         const addedText = added === 0 ? '' : `Added ${added} ${added === 1 ? 'photo' : 'photos'}. ${one ? '' : 'Tap each photo to add alt text and a caption. '}`;
         status(`${addedText}${problems.join(' ')}`.trim());
         // Ask for the alt text at once, unless the user opened a sheet meanwhile.
         const index = gallery.indexOf(lastAdded);
         if (one && index !== -1 && !photoSheet.open) openPhoto(index);
-        return added;
+        return { added, kept };
     };
     $('#photo-files')?.addEventListener('change', async () => {
         const input = $('#photo-files');
@@ -1281,10 +1285,18 @@ export async function editorScreen(container, [siteId, path]) {
     // ----- Photos from the share sheet or the inbox -----
     // Another screen hands them over once. Only a gallery takes them.
     const incoming = takeIncoming(site.id, path);
-    if (incoming && isGallery) {
-        container.querySelector('[data-mode="photos"]').click();
-        // Not awaited: the screen must return its cleanup function now.
-        addPhotoFiles(incoming.files, incoming.origins).then(() => incoming.onKept?.());
+    if (incoming && isGallery && !frontmatterError) {
+        if (restorePending) {
+            // Nothing is kept while the Restore choice shows, so the photos would be lost.
+            status('This gallery has changes that are not published. Tap Restore or Discard, then share the photos again.');
+        } else {
+            container.querySelector('[data-mode="photos"]').click();
+            // Not awaited: the screen must return its cleanup function now.
+            // The share is deleted only when every photo is added and kept on the device.
+            addPhotoFiles(incoming.files, incoming.origins)
+                .then(({ added, kept }) => (added === incoming.files.length && kept ? incoming.onKept?.() : undefined))
+                .catch(() => {}); // A failed delete only leaves a stale share. It expires.
+        }
     }
 
     // ----- Back -----
