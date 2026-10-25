@@ -36,10 +36,12 @@ test('the service worker uses the cache only when the network fails, never after
 });
 
 // Runs sw.js in a vm with a small fake worker scope. Real Response, Request, URL and FormData come from Node.
-function loadWorker(cacheKeys = []) {
+function loadWorker(cacheKeys = [], { failPutAt = 0 } = {}) {
     const listeners = {};
     const store = new Map();
     const deleted = [];
+    const opened = [];
+    let puts = 0;
     const scope = 'https://example.test/app/';
     const self = {
         location: new URL(scope + 'sw.js'),
@@ -49,20 +51,26 @@ function loadWorker(cacheKeys = []) {
         skipWaiting: async () => {}
     };
     const caches = {
-        open: async () => ({ put: async (key, response) => { store.set(key, response); } }),
+        open: async name => {
+            opened.push(name);
+            return { put: async (key, response) => {
+                    if (++puts === failPutAt) throw new Error('quota');
+                    store.set(key, response);
+                }, delete: async key => store.delete(key) };
+        },
         keys: async () => cacheKeys,
         delete: async key => { deleted.push(key); return true; }
     };
     vm.runInNewContext(sw, { self, caches, Response, Request, URL, fetch: async () => { throw new Error('no network'); } });
-    return { listeners, store, deleted };
+    return { listeners, store, deleted, opened };
 }
 
-async function share(files, url = 'https://example.test/app/share-target') {
+async function share(files, url = 'https://example.test/app/share-target', formData) {
     const worker = loadWorker();
     const form = new FormData();
     for (const file of files) form.append('photos', file);
     let answer;
-    worker.listeners.fetch({ request: { method: 'POST', url, formData: async () => form }, respondWith: p => { answer = p; } });
+    worker.listeners.fetch({ request: { method: 'POST', url, formData: formData ?? (async () => form) }, respondWith: p => { answer = p; } });
     return { worker, response: await answer };
 }
 
@@ -73,6 +81,7 @@ test('a share POST keeps each image and redirects to the share screen', async ()
         new File(['two'], 'c.png', { type: 'image/png' })
     ]);
     assert.equal(response.status, 303);
+    assert.deepEqual(worker.opened, ['gtg-share']);
     const id = response.headers.get('location').match(/^https:\/\/example\.test\/app\/#\/share\/(\d+-[a-z0-9]+)$/)[1];
     assert.deepEqual([...worker.store.keys()], [`share/${id}/0`, `share/${id}/1`]);
     const first = worker.store.get(`share/${id}/0`);
@@ -86,6 +95,24 @@ test('a share POST with no image redirects to the share screen and keeps nothing
     const { worker, response } = await share([new File(['note'], 'note.txt', { type: 'text/plain' })]);
     assert.equal(response.status, 303);
     assert.match(response.headers.get('location'), /#\/share\/\d+-[a-z0-9]+$/);
+    assert.equal(worker.store.size, 0);
+});
+
+test('a share that fails still redirects to the share screen and keeps nothing', async () => {
+    const { worker, response } = await share([], undefined, async () => { throw new Error('quota'); });
+    assert.equal(response.status, 303);
+    assert.match(response.headers.get('location'), /#\/share\/\d+-[a-z0-9]+$/);
+    assert.equal(worker.store.size, 0);
+});
+
+test('a share that fails after one photo was kept deletes that photo', async () => {
+    const worker = loadWorker([], { failPutAt: 2 });
+    const form = new FormData();
+    form.append('photos', new File(['one'], 'a.jpg', { type: 'image/jpeg' }));
+    form.append('photos', new File(['two'], 'b.jpg', { type: 'image/jpeg' }));
+    let answer;
+    worker.listeners.fetch({ request: { method: 'POST', url: 'https://example.test/app/share-target', formData: async () => form }, respondWith: p => { answer = p; } });
+    assert.equal((await answer).status, 303);
     assert.equal(worker.store.size, 0);
 });
 

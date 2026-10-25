@@ -164,6 +164,13 @@ The iCloud link copies everything in the Shortcut, with your token. Do these ste
 5. Put your own token in the Shortcut again, if you want to use it.
 6. Delete the token of the test site on GitHub, when you do not need it.
 
+If you shared a link that had a real token in it, do these steps at once:
+
+1. In the Shortcuts app, open the menu of the Shortcut. Stop sharing the iCloud link, or delete the Shortcut.
+2. On GitHub, revoke the token that was in the Shortcut.
+3. Make a new token.
+4. Do sections 4 and 5 again with the new token.
+
 ## 6. If the link stops working
 
 The iCloud link belongs to the Apple ID that made it. When that Apple ID deletes the Shortcut, the link stops working. Then do this:

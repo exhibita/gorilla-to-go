@@ -200,4 +200,6 @@ The owner approved 32–38 on 2026-10-25. 38 replaces a purge path that the owne
 - Close the app right after Publish of inbox photos. Open it again. Check that the photos do not show as waiting.
 - Two phones on one site: share at the same time. Check that both sets arrive.
 - Add the inbox photos on Android. Check that the branch is deleted.
+- Share while the 0.15 → 0.16 update is still pending.
+- Turn off the network after Publish of inbox photos and before the branch delete. Turn it on and open the site. Check that the inbox branch is deleted.
 - Offline: the site screen shows no error.

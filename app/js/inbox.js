@@ -46,7 +46,10 @@ async function listInbox({ site, token, fetch = globalThis.fetch, store = inboxS
 export async function countWaiting(opts) {
     try {
         await runCleanup(opts);
-        return (await listInbox(opts)).length;
+        const count = (await listInbox(opts)).length;
+        // An empty branch can stay after a failed delete. Delete it now. The result does not matter here.
+        if (count === 0) deleteBranchIfEmpty(opts).catch(() => {});
+        return count;
     } catch {
         return null;
     }
@@ -90,7 +93,7 @@ export async function discard({ item, ...opts }) {
     try {
         await deleteBranchIfEmpty(opts);
     } catch {
-        // The next cleanup deletes the empty branch.
+        // The next count of the site deletes the empty branch.
     }
 }
 
@@ -101,7 +104,7 @@ export async function recordPublished({ site, origins, store = inboxStore }) {
     await store.put({ siteId: site.id, cleanup: [...cleanup, ...added.map(({ path, sha }) => ({ path, sha }))] });
 }
 
-// Take one file off the cleanup list. The list is read again, so a file that was added meanwhile stays.
+// Take one file off the cleanup list. The list is read again. A file that is added at the same time as this write can be lost from the list.
 async function forget(site, entry, store) {
     const cleanup = await cleanupList(site, store);
     await store.put({ siteId: site.id, cleanup: cleanup.filter(other => !sameFile(other, entry)) });
@@ -127,7 +130,7 @@ export async function runCleanup(opts) {
         try {
             await deleteBranchIfEmpty(opts);
         } catch {
-            // The next cleanup deletes the empty branch.
+            // The next count of the site deletes the empty branch.
         }
     }
 }

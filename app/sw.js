@@ -103,15 +103,22 @@ self.addEventListener('activate', event => {
 // The key is share/<shareId>/<index>. The time in shareId lets the app delete old shares.
 async function keepShare(request) {
     const shareId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const cache = await caches.open(SHARE_CACHE);
-    const files = (await request.formData()).getAll('photos');
-    let index = 0;
-    for (const file of files) {
-        if (typeof file === 'string' || !file.type.startsWith('image/')) continue;
-        await cache.put(`share/${shareId}/${index}`, new Response(file, {
-            headers: { 'Content-Type': file.type, 'X-File-Name': encodeURIComponent(file.name) }
-        }));
-        index += 1;
+    const keys = [];
+    let cache;
+    try {
+        cache = await caches.open(SHARE_CACHE);
+        const files = (await request.formData()).getAll('photos');
+        for (const file of files) {
+            if (typeof file === 'string' || !file.type.startsWith('image/')) continue;
+            const key = `share/${shareId}/${keys.length}`;
+            await cache.put(key, new Response(file, {
+                headers: { 'Content-Type': file.type, 'X-File-Name': encodeURIComponent(file.name) }
+            }));
+            keys.push(key);
+        }
+    } catch {
+        // For example, the storage is full. Keep no part of the share. The share screen shows "No photos were received."
+        await Promise.all(keys.map(key => cache.delete(key).catch(() => {})));
     }
     return Response.redirect(new URL('./#/share/' + shareId, self.registration.scope).href, 303);
 }

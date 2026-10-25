@@ -16,7 +16,7 @@ export const SHORTCUT_PAGE = `
     <span>When the repository is public, anyone can see the history on github.com.</span>
     <span>For a public repository, do one of these:</span>
     <ul>
-        <li>Remove the location before you send. In Photos, tap Share, tap <strong>Options</strong>, and turn off <strong>Location</strong>. Do not change the Convert Image step of the Shortcut.</li>
+        <li>Remove the location before you send. In Photos, tap Share, tap <strong>Options</strong> at the top, and turn off <strong>Location</strong>. Do not change the Convert Image step of the Shortcut.</li>
         <li>Do not use the Shortcut. In the gallery, tap <strong>Add photos</strong>. The app removes the location and the other data before the upload.</li>
     </ul>
 </div>

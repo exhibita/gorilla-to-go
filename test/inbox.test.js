@@ -85,6 +85,30 @@ test('countWaiting returns null when there is no connection', async () => {
     assert.equal(await countWaiting(opts), null);
 });
 
+// countWaiting starts the branch delete and does not wait for it.
+const settle = () => new Promise(resolve => setTimeout(resolve, 20));
+
+test('countWaiting deletes an existing empty inbox branch', async () => {
+    const { github, opts } = setup([]);
+    assert.equal(await countWaiting(opts), 0);
+    await settle();
+    assert.equal(github.branch, false);
+});
+
+test('countWaiting sends no DELETE when the inbox branch does not exist', async () => {
+    const { github, opts } = setup([], { branch: false });
+    assert.equal(await countWaiting(opts), 0);
+    await settle();
+    assert.equal(github.deletes().length, 0);
+});
+
+test('countWaiting keeps the branch when photos wait', async () => {
+    const { github, opts } = setup([photo('a.jpg', 'A1')]);
+    assert.equal(await countWaiting(opts), 1);
+    await settle();
+    assert.equal(github.branch, true);
+});
+
 test('listWaiting returns an empty list when the inbox branch does not exist', async () => {
     const { opts } = setup([], { branch: false });
     assert.deepEqual(await listWaiting(opts), []);
