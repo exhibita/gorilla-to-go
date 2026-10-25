@@ -1,6 +1,6 @@
 // Help pages inside the app, so they work offline (decision 16).
 // Token page: from docs/github-token.md. Upgrade page: from vanilla-gorilla docs/UPGRADE-v2.md and UPGRADE-v3.md.
-// Install page: from docs/install-app.md (help-install.js).
+// Install page: from docs/install-app.md (help-install.js). Shortcut page: from docs/ios-shortcut.md (help-shortcut.js).
 // What is new: CHANGELOG.md. All versions from GitHub when online; the last 3 (in the app) when offline.
 import { marked } from '../../vendor/marked/marked.esm.js';
 import { icon } from '../dom.js';
@@ -10,6 +10,7 @@ import { sanitizeHtml } from '../sanitize.js';
 import { latestEntries } from '../changelog.js';
 import { RECENT_CHANGES } from '../changelog-recent.js';
 import { INSTALL_PAGE } from './help-install.js';
+import { SHORTCUT_PAGE } from './help-shortcut.js';
 import { LINKS_TEMPLATE_VERSION } from '../links.js';
 import { VERSION } from '../version.js';
 
@@ -141,6 +142,8 @@ function helpScreen(container, title, body) {
 
 export const tokenHelpScreen = container => helpScreen(container, 'Create a GitHub token', TOKEN_PAGE);
 export const upgradeHelpScreen = container => helpScreen(container, 'Upgrade a site', UPGRADE_PAGE);
+
+export const shortcutHelpScreen = container => helpScreen(container, 'Send photos from an iPhone', SHORTCUT_PAGE);
 
 export function installHelpScreen(container) {
     helpScreen(container, 'Install the app', INSTALL_PAGE);

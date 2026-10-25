@@ -18,6 +18,7 @@ export function aboutSheetHtml() {
                 <li><a class="text-link text-link--small" href="#/help/install" data-about-link>How to install the app</a></li>
                 <li><a class="text-link text-link--small" href="#/help/token" data-about-link>How to create a GitHub token</a></li>
                 <li><a class="text-link text-link--small" href="#/help/upgrade" data-about-link>How to upgrade a site</a></li>
+                <li><a class="text-link text-link--small" href="#/help/shortcut" data-about-link>How to send photos from an iPhone</a></li>
             </ul>
             <button type="button" class="btn btn-secondary" data-close>Close</button>
         </div>

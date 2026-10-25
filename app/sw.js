@@ -63,6 +63,7 @@ const ASSETS = [
     'js/screens/editor.js',
     'js/screens/gallery-picker.js',
     'js/screens/help-install.js',
+    'js/screens/help-shortcut.js',
     'js/screens/help.js',
     'js/screens/inbox-view.js',
     'js/screens/inbox.js',
