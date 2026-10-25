@@ -1,4 +1,4 @@
-// Hash routing: #/, #/add, #/site/<id>, #/site/<id>/page/<path>, #/help/token, #/help/upgrade, #/help/install, #/help/changes.
+// Hash routing: #/, #/add, #/site/<id>, #/site/<id>/page/<path>, #/site/<id>/edit/<path>, #/site/<id>/new, #/site/<id>/inbox, #/share/<shareId>, #/help/token, #/help/upgrade, #/help/install, #/help/changes.
 // Hash routes work at a domain root and at a subpath, and need no server rules.
 import { escapeHtml } from './dom.js';
 
