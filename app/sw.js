@@ -48,6 +48,7 @@ const ASSETS = [
     'js/github.js',
     'js/image-resize.js',
     'js/images.js',
+    'js/inbox.js',
     'js/incoming.js',
     'js/links.js',
     'js/new-page.js',

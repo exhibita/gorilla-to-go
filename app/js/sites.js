@@ -53,6 +53,7 @@ export async function removeSite(id) {
         await deviceStore.deletePageList(id);
         await deviceStore.pruneBlobs();
         await deleteSiteEdits(id);
+        await db.remove('inbox', id);
     } catch {
         // The next page list load prunes again.
     }
