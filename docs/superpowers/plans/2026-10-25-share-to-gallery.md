@@ -70,7 +70,7 @@
 - Produces:
   - Manifest `share_target` exactly as in spec 7.1 (`action: "./share-target"`, `method: "POST"`, `enctype: "multipart/form-data"`, `params.files: [{ name: "photos", accept: ["image/*"] }]`).
   - In `sw.js`: `const SHARE_CACHE = 'gtg-share';`. A POST to `./share-target` puts each `image/*` file in `SHARE_CACHE` under the key `share/<shareId>/<index>` (a `Response` of the file with the headers `Content-Type` and `X-File-Name`, URI-encoded). It answers `Response.redirect(new URL('./#/share/' + shareId, self.registration.scope).href, 303)`. `shareId` is `Date.now()` and a random part.
-  - `app/js/share-store.js`: `readShare(shareId, cachesApi = caches) -> Promise<File[]>` and `deleteShare(shareId, cachesApi = caches) -> Promise<void>`.
+  - `app/js/share-store.js`: `readShare(shareId, cachesApi = caches) -> Promise<File[]>`, `deleteShare(shareId, cachesApi = caches) -> Promise<void>` and `pruneShares(now = Date.now(), cachesApi = caches) -> Promise<void>` (deletes shares older than one day, from the time in `shareId`; a share that the user did not finish does not stay for ever). The Share screen calls `pruneShares` when it opens.
 
 - [ ] **Step 1: Write the failing tests.**
   - `test/service-worker.test.js`: load `sw.js` in `node:vm` with a fake `self`, `caches` and `Response.redirect`. Collect the `fetch` listener. Then:
@@ -78,7 +78,7 @@
     - `a share POST with no image redirects to the share screen and keeps nothing`.
     - `activate keeps the gtg-share cache`: the keys `gtg-0.1.0`, `gtg-share` and the current `gtg-<VERSION>` → only `gtg-0.1.0` is deleted.
     - `the manifest has the share target for images`: parse the manifest, `deepEqual` the object from spec 7.1.
-  - `test/share-store.test.js`: with a fake `caches`, `readShare returns the files in order with their names and types` and `deleteShare removes every entry of the share`.
+  - `test/share-store.test.js`: with a fake `caches`, `readShare returns the files in order with their names and types`, `deleteShare removes every entry of the share` and `pruneShares deletes only the shares older than one day`.
 - [ ] **Step 2: Run** `node --test test/service-worker.test.js test/share-store.test.js`. Expected: FAIL.
 - [ ] **Step 3: Implement.** In the `fetch` listener, handle the share POST *before* `if (request.method !== 'GET' …) return;`. In `activate`, exclude `SHARE_CACHE` from the delete filter. Add `share_target` to the manifest. Write `share-store.js`, and add `js/share-store.js` to `ASSETS`.
 - [ ] **Step 4: Run** `npm test`. Expected: PASS (the `ASSETS` test included).
@@ -116,12 +116,13 @@
 ### Task 4: Inbox module (waiting list, discard, cleanup, branch delete, purge record)
 
 **Files:**
-- Modify: `app/js/db.js` (version 4, store `inbox`, key `siteId`)
+- Modify: `app/js/db.js` (version 4, store `inbox`, key `siteId`), `app/js/edits.js` (`listSiteEdits`)
 - Create: `app/js/inbox.js`
 - Test: `test/inbox.test.js`
 
 **Interfaces:**
 - Consumes: Task 1 functions; `listFolder`, `deleteFile`; Task 3 `checkPhotoBytes`, `INBOX_BRANCH`, `INBOX_FOLDER`.
+- Produces in `edits.js`: `listSiteEdits(siteId) -> Promise<edit[]>`: all kept edits of the site (as `listNewPages`, without the `baseSha` filter). The inbox screen passes the result to `markPending`.
 - Produces (each takes `{ site, token, fetch = globalThis.fetch, store = inboxStore }`, as `pages.js` does with `deviceStore`):
   - `export const inboxStore`: `get(siteId)` and `put(record)` over db store `inbox`. Record: `{ siteId, cleanup: [{ path, sha }], purgeNeeded: boolean, purge: null | { repo: 'owner/repo', commits: string[] } }`. `export function memoryInboxStore()` for tests.
   - `countWaiting(opts) -> Promise<number|null>`: runs `runCleanup` first, then `listFolder` on `INBOX_BRANCH`. Returns `null` on any error (offline included).
@@ -129,8 +130,8 @@
   - `markPending(waiting, edits) -> waiting`: adds `pending: true` to each item whose `sha` is an `image.inbox.sha` in any of the site's local edits (`edits` from `edits.js`).
   - `discard(opts & { item }) -> Promise<void>`: `deleteFile` on `INBOX_BRANCH` with the item's SHA, then `deleteBranchIfEmpty`.
   - `recordPublished(opts & { origins: { path, sha }[] }) -> Promise<void>`: appends to `cleanup`.
-  - `runCleanup(opts) -> Promise<void>`: deletes each listed file (already gone = done) and removes it from the list after each delete. Then `deleteBranchIfEmpty`.
-  - `deleteBranchIfEmpty(opts) -> Promise<{ deleted: boolean }>`: lists the folder; if it is not empty, stop. Lists again; if still empty: when `purgeNeeded`, store `purge` with `listBranchCommits(base: site.branch, head: INBOX_BRANCH)`; then `deleteBranch`.
+  - `runCleanup(opts) -> Promise<void>`: deletes each listed file (already gone = done) and removes it from the list after each delete. Then, only when it deleted at least one file, `deleteBranchIfEmpty`. With an empty list it sends no request, so a site open costs no write.
+  - `deleteBranchIfEmpty(opts) -> Promise<{ deleted: boolean }>`: `getRefSha` first; `null` (no branch) → `{ deleted: false }` and no `DELETE`. Lists the folder; if it is not empty, stop. Lists again; if still empty: when `purgeNeeded`, store `purge` with `listBranchCommits(base: site.branch, head: INBOX_BRANCH)`. When `listBranchCommits` fails, do not delete the branch this time (the commit IDs must be kept first). Then `deleteBranch`.
   - `clearPurge(opts) -> Promise<void>`: sets `purge: null`, `purgeNeeded: false`.
   - `inboxOrigins(images) -> { path, sha }[]`: the `inbox` field of each image that has one.
   - `cleanAfterPublish(opts & { images }) -> Promise<void>`: when `inboxOrigins(images)` is not empty, `recordPublished`, then `runCleanup`. Errors are caught and ignored (the next site open retries).
@@ -146,10 +147,13 @@
   - `the branch is deleted only when the folder is empty on both reads`: the second read returns a new file → no `DELETE` call.
   - `before the branch delete, the commit IDs are kept when a bad file was seen`: `purge.commits` equals the compare result, and the `compare` call comes before the `DELETE`.
   - `no purge record when no bad file was seen`.
+  - `no DELETE when the inbox branch does not exist` (`getRefSha` → 404).
+  - `runCleanup with an empty list sends no request`.
+  - `the branch is kept when the commit IDs cannot be read` (`purgeNeeded`, compare → 500 → no `DELETE`).
   - `cleanAfterPublish deletes only the images that came from the inbox`: images `[{ path: 'src/a.jpg', inbox: { path: 'gtg-inbox/a.jpg', sha: 's1' } }, { path: 'src/b.jpg' }]` → one `DELETE …/contents/gtg-inbox/a.jpg` with `branch: 'gtg-inbox'`.
   - `cleanAfterPublish does nothing for images without an inbox origin` (no request, the store stays empty).
 - [ ] **Step 2: Run** `node --test test/inbox.test.js`. Expected: FAIL.
-- [ ] **Step 3: Implement** `inbox.js`. In `db.js`, set `DB_VERSION = 4`, add the `inbox` store in `onupgradeneeded`, and update the header comments. Add `js/inbox.js` to `ASSETS`. In `sites.js` `removeSite`, also remove the `inbox` record of the site.
+- [ ] **Step 3: Implement** `inbox.js` and `listSiteEdits`. In `db.js`, set `DB_VERSION = 4`, add the `inbox` store in `onupgradeneeded`, and update the header comments (the store list, the version note, and `inbox.js` in the list of modules that use `db.js`). Add `js/inbox.js` to `ASSETS`. In `sites.js` `removeSite`, also remove the `inbox` record of the site.
 - [ ] **Step 4: Run** `npm test`. Expected: PASS.
 - [ ] **Step 5: Commit** `feat: share inbox cleanup and purge record (#35)`.
 
@@ -165,7 +169,7 @@ The project does not run `editorScreen` in tests: the editor needs IndexedDB and
 
 **Interfaces:**
 - Consumes: Task 3 `takeIncoming`; Task 4 `cleanAfterPublish`.
-- Produces: inside `editorScreen`, `addPhotoFiles(files: (File|Blob)[], origins?: (null | { path, sha })[]) -> Promise<number>` (the number added). A pending image with an origin gets the field `inbox: { path, sha }`. `saveLocalEdit` keeps the image objects as they are, so the field is kept on the device. `renameTakenImages` changes only `path`, so the field stays.
+- Produces: inside `editorScreen`, `addPhotoFiles(files: (File|Blob)[], origins?: (null | { path, sha })[]) -> Promise<number>` (the number added). A pending image with an origin gets the field `inbox: { path, sha }`. Checked on 2026-10-25: `keepNow` passes `referencedImages(...)` (a filter, same objects) to `saveLocalEdit`, which stores them as they are; `renameTakenImages` sets only `image.path` ([editor.js:1108](../../../app/js/screens/editor.js)). So the field stays on the device and after a rename. Keep it that way: do not rebuild image objects as `{ path, base64, mimeType }`.
 - Produces in `images.js`: `photoFileName(file) -> string`: `file.name` when it has one, else `'photo.jpg'`.
 
 - [ ] **Step 1: Write the failing test** in `test/images.test.js`: `photoFileName uses the file name, and photo.jpg for a Blob without a name`.
@@ -183,7 +187,7 @@ The project does not run `editorScreen` in tests: the editor needs IndexedDB and
 ### Task 6: Screens: Share (Android), Inbox, and the waiting row
 
 **Files:**
-- Create: `app/js/screens/share.js` (`#/share/<shareId>`), `app/js/screens/inbox.js` (`#/site/<id>/inbox`), `app/js/screens/gallery-picker.js`
+- Create: `app/js/screens/share.js` (`#/share/<shareId>`), `app/js/screens/inbox.js` (`#/site/<id>/inbox`), and the HTML builders in their own modules, as `editor-links.js` is split from `editor.js`, so the tests do not load the screens' imports: `app/js/screens/gallery-picker.js`, `app/js/screens/inbox-view.js`
 - Modify: `app/js/app.js` (routes), `app/js/router.js` (route list comment), `app/js/screens/site.js` (waiting row), `app/css/app.css`
 - Test: `test/share-screens.test.js` (jsdom, the HTML builders only, as `test/editor-links.test.js` does)
 
@@ -191,8 +195,8 @@ The project does not run `editorScreen` in tests: the editor needs IndexedDB and
 - Consumes: Task 2 `readShare`, `deleteShare`; Task 3 `setIncoming`, `problemText`; Task 4 `countWaiting`, `listWaiting`, `markPending`, `discard`, `clearPurge`, `inboxStore`; `loadPages`, `listSites`, `getToken`.
 - Produces:
   - `gallery-picker.js`: `galleryPickerHtml(pages) -> string` (one 44 px row per page of type `gallery`, with its title; an empty list → "This site has no gallery." and a link to New page) and `galleries(pages) -> page[]`.
-  - `inbox.js` (screen) exports the builders: `waitingCardHtml(item) -> string` (a photo card; a `problem` → `problemText` and only Discard; `pending` → "Added, not published"; all text escaped with `escapeHtml`), `purgeSheetHtml(purge) -> string`, `waitingRowHtml(count, purge) -> string` (empty string when `count` is `null` or `0` and there is no purge).
-  - `share.js` exports `shareIntroText(count) -> string` ("Add 1 photo to a gallery", "Add 3 photos to a gallery", "No photos were received.").
+  - `inbox-view.js` exports the builders: `waitingCardHtml(item) -> string` (a photo card; a `problem` → `problemText` and only Discard; `pending` → "Added, not published"; all text escaped with `escapeHtml`), `purgeSheetHtml(purge) -> string`, `waitingRowHtml(count, purge) -> string` (empty string when `count` is `null` or `0` and there is no purge).
+  - `gallery-picker.js` also exports `shareIntroText(count) -> string` ("Add 1 photo to a gallery", "Add 3 photos to a gallery", "No photos were received.").
   - Routes: `route(/^#\/share\/([^/]+)$/, shareScreen)`, `route(/^#\/site\/([^/]+)\/inbox$/, inboxScreen)`.
 
 Screen behavior:
