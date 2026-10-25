@@ -41,7 +41,7 @@ All decisions were made on 2026-10-17 unless a different date is shown.
 | 35 | (2026-10-25) The users of a site can share one token. The Shortcut keeps its own copy of that token. |
 | 36 | (2026-10-25) The Shortcut converts each photo to JPEG without metadata, at most 1600 px wide, before the upload. |
 | 37 | (2026-10-25) Each waiting photo has a Discard button that deletes it from the inbox. |
-| 38 | (2026-10-25) GTG checks each inbox file. A file that is not a JPEG or has GPS data can only be discarded. When GTG found such a file, it offers a request to GitHub Support to purge the inbox commits after the branch is deleted. |
+| 38 | (2026-10-25) GTG does not check inbox files and offers no purge. The Shortcut help page warns iPhone users: a shared photo stays in the repository history, so for a public repository, remove the location before sending, or use Add photos in GTG. |
 
 ## Notes
 
