@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    imageFolder, imageName, markdownPath, repoImagePath, fitSize, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, MAX_WIDTH
+    imageFolder, imageName, markdownPath, repoImagePath, fitSize, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, photoFileName, MAX_WIDTH
 } from '../app/js/images.js';
 
 test('imageFolder puts the images of a page in src/images/<type>/<slug>/ (mvp-plan section 7)', () => {
@@ -107,4 +107,10 @@ test('insertBlock puts the image line in its own paragraph at the cursor', () =>
     assert.equal(insertBlock({ text: 'One\n\nTwo', start: 5, end: 5 }, img).text, `One\n\n${img}\n\nTwo`);
     assert.equal(insertBlock({ text: 'One\n', start: 4, end: 4 }, img).text, `One\n\n${img}\n\n`);
     assert.equal(insertBlock({ text: 'Replace THIS now', start: 8, end: 12 }, img).text, `Replace \n\n${img}\n\n now`);
+});
+
+test('photoFileName uses the file name, and photo.jpg for a Blob without a name', () => {
+    assert.equal(photoFileName({ name: 'cat.png' }), 'cat.png');
+    assert.equal(photoFileName(new Blob(['x'], { type: 'image/jpeg' })), 'photo.jpg');
+    assert.equal(photoFileName({ name: '' }), 'photo.jpg');
 });
