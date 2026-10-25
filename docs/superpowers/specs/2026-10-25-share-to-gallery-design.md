@@ -118,10 +118,11 @@ Delivery:
 
 1. On the site screen, GTG lists `gtg-inbox/` on the `gtg-inbox` branch (`listFolder` returns `[]` when the branch or folder does not exist).
 2. When there are photos, show "N photos waiting" with an **Add to a gallery** button. When the check fails or the app is offline, show nothing and no error.
-3. The user taps the button and sees the waiting photos. Each photo has a **Discard** button (owner's decision, 2026-10-25). Discard asks for confirmation, then deletes that file from the inbox at once.
-4. The user chooses a gallery for the remaining photos.
-5. GTG downloads each photo by its blob SHA (`application/vnd.github.raw+json`, as `github.js` does now), makes a `File`, and adds the files to the gallery (section 9).
-6. When a user adds an inbox photo to a gallery and then removes it before Publish, the photo is not deleted. It stays in the inbox and shows as waiting again.
+3. GTG checks the first bytes of each waiting file (section 8.5). A file that fails the check shows a warning and can only be discarded.
+4. The user taps the button and sees the waiting photos. Each photo has a **Discard** button (owner's decision, 2026-10-25). Discard asks for confirmation, then deletes that file from the inbox at once.
+5. The user chooses a gallery for the remaining photos.
+6. GTG downloads each photo by its blob SHA (`application/vnd.github.raw+json`, as `github.js` does now), makes a `File`, and adds the files to the gallery (section 9).
+7. When a user adds an inbox photo to a gallery and then removes it before Publish, the photo is not deleted. It stays in the inbox and shows as waiting again.
 
 ### 8.4 Inbox cleanup
 
@@ -136,7 +137,19 @@ Known limits (documented, not fixed):
 
 - A Shortcut upload can arrive between the last check and the branch delete. That upload is lost from the inbox. The window is less than one second.
 - Two users who add the same waiting photo at the same time both publish it. The user can remove the copy in the Photos view.
-- After the branch is deleted, its commits are not on any branch, tag or pull request. GitHub removes them later. Until then, a person who knows the exact commit ID can open it. Only GitHub Support can purge them at once. The owner accepts this.
+- After the branch is deleted, its commits are not on any branch, tag or pull request. GitHub removes them later. Until then, a person who knows the exact commit ID can open it. Only GitHub Support can purge them at once. For photos that pass the check in 8.5, the owner accepts this. For photos that fail it, see 8.5.
+
+### 8.5 Bad files and the purge path
+
+The owner does not accept GPS data or HEIC files in the repository (2026-10-25). The Shortcut prevents this (8.2 step 2). GTG checks it too, because a user can change the Shortcut or upload in another way.
+
+1. **Check.** Before GTG shows a waiting photo, it reads the first bytes of the file. The file fails when it is not a JPEG (it does not start with `FF D8 FF`), or when it has an EXIF segment with GPS data (the GPS IFD tag `0x8825`). Put this check in a pure function, so it runs in unit tests.
+2. **Block.** A file that fails shows "This photo has location data" or "This is not a JPEG photo". The user can only discard it. GTG never adds it to a gallery.
+3. **Record.** When GTG found a bad file in the inbox, it keeps the site and the commit IDs of the `gtg-inbox` branch on the device (the commits that GTG can list before the branch is deleted).
+4. **Delete.** The branch delete in 8.4 runs as usual.
+5. **Offer the purge.** After the delete, GTG shows **Request a full purge**. It opens GitHub Support's contact page and shows the repository name and the commit IDs, with a copy button. The text says that only GitHub Support can remove these commits from GitHub's servers. When the user taps **Done**, GTG forgets the record.
+
+The GitHub API cannot purge unreachable commits, so GTG cannot do the purge itself. When GTG found no bad file, there is no purge to request and no button. The link to GitHub Support is a plain link that opens in the browser. It does not change the CSP.
 
 ## 9. Shared change in the editor
 
@@ -148,9 +161,9 @@ Now the add-photo logic is inside the `#photo-files` change handler ([editor.js:
 
 The editor gets the incoming photos by one route, for example `#/edit/<siteId>/<path>?incoming=<key>`. The `incoming` key points to the files in `gtg-share` or to the inbox list. The builder chooses the exact form.
 
-## 10. Proposed decisions (not yet in `docs/decisions.md`)
+## 10. Decisions
 
-Add these after approval:
+The owner approved 32–37 on 2026-10-25. 38 was added on the same day at the owner's request. They are in `docs/decisions.md`.
 
 | # | Decision |
 |---|---|
@@ -160,6 +173,7 @@ Add these after approval:
 | 35 | The users of a site can share one token. The Shortcut keeps its own copy of that token. |
 | 36 | The Shortcut converts each photo to JPEG without metadata, at most 1600 px wide, before the upload. |
 | 37 | Each waiting photo has a Discard button that deletes it from the inbox. |
+| 38 | GTG checks each inbox file. A file that is not a JPEG or has GPS data can only be discarded. When GTG found such a file, it offers a request to GitHub Support to purge the inbox commits after the branch is deleted. |
 
 ## 11. Calls made by Claude (not by the owner)
 
@@ -184,6 +198,7 @@ Add these after approval:
 - Android Chrome, installed GTG: share 1 and 5 photos from Photos. Check that the CSP `form-action 'none'` does not block the share POST.
 - iPhone (owner, borrowed phone): share 1 and 5 photos with the Shortcut. Check JPEG, no GPS, size.
 - Discard a waiting photo. Check that it leaves the inbox.
+- Upload a HEIC file and a JPEG with GPS data to the inbox by hand. Check that GTG blocks both and offers the purge request after the branch delete.
 - Close the app right after Publish of inbox photos. Open it again. Check that the photos do not show as waiting.
 - Two phones on one site: share at the same time. Check that both sets arrive.
 - Add the inbox photos on Android. Check that the branch is deleted.
