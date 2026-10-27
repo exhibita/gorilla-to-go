@@ -15,7 +15,9 @@ import { linksViewHtml, linkSheetHtml, linkListItems, previewLinks, firstLinkPro
 import { toggleWrap, toggleLinePrefix, insertLink, createHistory, continueList } from '../editor-logic.js';
 import { getLocalEdit, saveLocalEdit, deleteLocalEdit } from '../edits.js';
 import { saveFile, pathExists, commitFiles, listFolder, getImageDataUrl, getSiteCss, gitBlobSha, base64ToBytes, listBuildRuns } from '../github.js';
-import { imageFolder, imageName, markdownPath, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, galleryItems, galleryImagePath, moveItem } from '../images.js';
+import { imageFolder, imageName, markdownPath, markdownImage, referencedImages, photoFileName, namesInText, insertBlock, replaceImagePath, galleryItems, galleryImagePath, moveItem } from '../images.js';
+import { takeIncoming } from '../incoming.js';
+import { cleanAfterPublish } from '../inbox.js';
 import { prepareImage, ImageError } from '../image-resize.js';
 import { sanitizeHtml } from '../sanitize.js';
 import { siteLook, TEMPLATE_LOOK, LOOK_KEYS } from '../site-look.js';
@@ -336,13 +338,15 @@ export async function editorScreen(container, [siteId, path]) {
     // While the Restore choice shows, nothing is kept: the earlier changes must stay until the user
     // taps Restore or Discard.
     let restorePending = false;
+    // Returns true only when the text and its images are saved on the device.
     const keepNow = async () => {
         clearTimeout(keepTimer);
-        if (restorePending || isDeleted) return;
+        if (restorePending || isDeleted) return false;
         const text = currentText();
         try {
             if (text === originalText) {
                 await deleteLocalEdit(site.id, path);
+                return false;
             } else {
                 // Only the photos that the text still uses are kept.
                 const images = referencedImages(text, pendingImages);
@@ -353,12 +357,14 @@ export async function editorScreen(container, [siteId, path]) {
                     if (!images.length) throw err;
                     await saveLocalEdit({ siteId: site.id, path, baseSha, text });
                     status('The app cannot keep the images on this device. Your text is kept. Publish soon.');
-                    return;
+                    return false;
                 }
                 status(`Not published. Your changes are kept on this device (${listTimeText(Date.now())}).`);
+                return true;
             }
         } catch {
             status('The app cannot keep your changes on this device. Publish soon.');
+            return false;
         }
     };
     const keepSoon = () => {
@@ -726,11 +732,9 @@ export async function editorScreen(container, [siteId, path]) {
         if (preparing) return;
         $('#photo-files').click();
     });
-    $('#photo-files')?.addEventListener('change', async () => {
-        const input = $('#photo-files');
-        const files = [...input.files];
-        input.value = '';
-        if (!files.length) return;
+    // Make the photos ready and add them to the gallery. A photo from the inbox has an origin: its
+    // path and SHA in the inbox. Returns the number added and whether they are kept on the device.
+    const addPhotoFiles = async (files, origins = []) => {
         preparing = true;
         const problems = [];
         let added = 0;
@@ -739,30 +743,41 @@ export async function editorScreen(container, [siteId, path]) {
             githubNames = await namesOnGitHub();
             for (const [i, file] of files.entries()) {
                 status(files.length === 1 ? 'Making the photo ready.' : `Making photo ${i + 1} of ${files.length} ready.`);
+                const fileName = photoFileName(file);
                 try {
                     const prepared = await prepareImage(file);
-                    const repoPath = folder + freeName(file.name, prepared.extension);
-                    pendingImages = [...pendingImages, { path: repoPath, base64: prepared.base64, mimeType: prepared.mimeType }];
+                    const repoPath = folder + freeName(fileName, prepared.extension);
+                    const image = { path: repoPath, base64: prepared.base64, mimeType: prepared.mimeType };
+                    if (origins[i]) image.inbox = origins[i];
+                    pendingImages = [...pendingImages, image];
                     lastAdded = { path: markdownPath(repoPath) };
                     gallery = [...gallery, lastAdded];
                     added++;
                     renderPhotos();
                     keepSoon(); // Each photo is kept on the device, also when the user leaves now.
                 } catch (err) {
-                    problems.push(`${file.name}: ${err instanceof ImageError ? err.message : 'The app cannot read this image.'}`);
+                    problems.push(`${fileName}: ${err instanceof ImageError ? err.message : 'The app cannot read this image.'}`);
                 }
             }
         } finally {
             preparing = false;
         }
-        if (added) await keepNow();
-        if (!photos.isConnected) return; // The user left the editor. The photos are kept.
+        const kept = added ? await keepNow() : false;
+        if (!photos.isConnected) return { added, kept }; // The user left the editor. The photos are kept.
         const one = added === 1 && files.length === 1;
         const addedText = added === 0 ? '' : `Added ${added} ${added === 1 ? 'photo' : 'photos'}. ${one ? '' : 'Tap each photo to add alt text and a caption. '}`;
         status(`${addedText}${problems.join(' ')}`.trim());
         // Ask for the alt text at once, unless the user opened a sheet meanwhile.
         const index = gallery.indexOf(lastAdded);
         if (one && index !== -1 && !photoSheet.open) openPhoto(index);
+        return { added, kept };
+    };
+    $('#photo-files')?.addEventListener('change', async () => {
+        const input = $('#photo-files');
+        const files = [...input.files];
+        input.value = '';
+        if (!files.length) return;
+        await addPhotoFiles(files);
     });
 
     // ----- Links of a links page (template version 3) -----
@@ -1207,6 +1222,7 @@ export async function editorScreen(container, [siteId, path]) {
                 // The images are on GitHub now. The Preview keeps showing them without a download.
                 for (const image of images) imageUrls.set(image.path, Promise.resolve(dataUrl(image)));
                 pendingImages = pendingImages.filter(image => !images.includes(image));
+                cleanAfterPublish({ site, token, images }); // Not awaited. It catches its own errors.
                 if (photos && !photos.hidden) renderPhotos(); // The "Not published" marks go away.
                 if (linksView && !linksView.hidden) renderLinks();
             } else {
@@ -1265,6 +1281,23 @@ export async function editorScreen(container, [siteId, path]) {
             window.removeEventListener('beforeunload', warnBeforeClose);
         }
     });
+
+    // ----- Photos from the share sheet or the inbox -----
+    // Another screen hands them over once. Only a gallery takes them.
+    const incoming = takeIncoming(site.id, path);
+    if (incoming && isGallery && !frontmatterError) {
+        if (restorePending) {
+            // Nothing is kept while the Restore choice shows, so the photos would be lost.
+            status('This gallery has changes that are not published. Tap Restore or Discard, then share the photos again.');
+        } else {
+            container.querySelector('[data-mode="photos"]').click();
+            // Not awaited: the screen must return its cleanup function now.
+            // The share is deleted only when every photo is added and kept on the device.
+            addPhotoFiles(incoming.files, incoming.origins)
+                .then(({ added, kept }) => (added === incoming.files.length && kept ? incoming.onKept?.() : undefined))
+                .catch(() => {}); // A failed delete only leaves a stale share. It expires.
+        }
+    }
 
     // ----- Back -----
     container.querySelector('[data-back]').addEventListener('click', event => {

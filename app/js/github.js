@@ -520,6 +520,44 @@ export async function listFolder({ owner, repo, branch, path, token, fetch = glo
     }
 }
 
+// Send one request for the inbox calls. Throws GitHubError for no connection and for a refused token.
+async function inboxRequest(fetch, token, path, options) {
+    try {
+        const response = await request(fetch, token, path, options);
+        if (response.status === 401) throw new GitHubError('Token not accepted');
+        return response;
+    } catch (err) {
+        if (err instanceof CancelledError || err instanceof GitHubError) throw err;
+        throw new GitHubError('No connection to GitHub', { offline: true });
+    }
+}
+
+// The SHA of the commit at the end of a branch, or null when there is no such branch.
+export async function getRefSha({ owner, repo, branch, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    const response = await inboxRequest(fetch, token, `${repoPath(owner, repo)}/git/ref/heads/${encodePath(branch)}`, { signal, timeoutMs });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new GitHubError(`GitHub error ${response.status}`);
+    return (await response.json()).object.sha;
+}
+
+// Delete a branch. A branch that is already gone (422 or 404) counts as deleted.
+export async function deleteBranch({ owner, repo, branch, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    const response = await inboxRequest(fetch, token, `${repoPath(owner, repo)}/git/refs/heads/${encodePath(branch)}`, { method: 'DELETE', signal, timeoutMs });
+    if (response.ok || response.status === 422 || response.status === 404) return;
+    if (response.status === 403) throw new GitHubError('No write access');
+    throw new GitHubError(`GitHub error ${response.status}`);
+}
+
+// The bytes of one file, by its blob SHA.
+export async function getBlobBytes({ owner, repo, sha, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    const response = await inboxRequest(fetch, token, `${repoPath(owner, repo)}/git/blobs/${encodeURIComponent(sha)}`, {
+        signal, timeoutMs: timeoutMs ?? BLOB_TIMEOUT_MS, accept: 'application/vnd.github.raw+json'
+    });
+    if (response.status === 404) throw new GitHubError('File not found');
+    if (!response.ok) throw new GitHubError(`GitHub error ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+}
+
 // The GitHub Actions runs of the branch (newest first), or of one commit (headSha), for the publish
 // status. Returns [{ sha, event, status, conclusion, url, createdAt, updatedAt }]. A token without the
 // Actions (read) permission gives an error with noAccess: true.

@@ -8,7 +8,9 @@ import { siteScreen } from './screens/site.js';
 import { pageScreen } from './screens/page.js';
 import { editorScreen } from './screens/editor.js';
 import { newPageScreen } from './screens/new-page.js';
-import { tokenHelpScreen, upgradeHelpScreen, installHelpScreen, changesHelpScreen } from './screens/help.js';
+import { shareScreen } from './screens/share.js';
+import { inboxScreen } from './screens/inbox.js';
+import { tokenHelpScreen, upgradeHelpScreen, installHelpScreen, shortcutHelpScreen, changesHelpScreen } from './screens/help.js';
 
 // "#/": open the last site, else the first site, else the Welcome screen (decision 13).
 async function homeScreen(container) {
@@ -31,9 +33,12 @@ function start() {
     route(/^#\/site\/([^/]+)\/page\/(.+)$/, pageScreen);
     route(/^#\/site\/([^/]+)\/edit\/(.+)$/, editorScreen);
     route(/^#\/site\/([^/]+)\/new$/, newPageScreen);
+    route(/^#\/site\/([^/]+)\/inbox$/, inboxScreen);
+    route(/^#\/share\/([^/]+)$/, shareScreen);
     route(/^#\/help\/token$/, tokenHelpScreen);
     route(/^#\/help\/upgrade$/, upgradeHelpScreen);
     route(/^#\/help\/install$/, installHelpScreen);
+    route(/^#\/help\/shortcut$/, shortcutHelpScreen);
     route(/^#\/help\/changes$/, changesHelpScreen);
 
     startRouter(document.getElementById('app'));

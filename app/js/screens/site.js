@@ -6,6 +6,7 @@ import { getToken } from '../auth.js';
 import { getSite, listSites, removeSite, setLastSiteId, updateSite } from '../sites.js';
 import { loadPages, deviceStore } from '../pages.js';
 import { listNewPages } from '../edits.js';
+import { countWaiting } from '../inbox.js';
 import { parseFrontmatter } from '../frontmatter.js';
 import { classifyPath, filterPages, formatDate, listTimeText, pageType, sortPages, TYPE_LABELS } from '../pages-logic.js';
 import { LINKS_TEMPLATE_VERSION } from '../links.js';
@@ -13,6 +14,7 @@ import { escapeHtml, icon } from '../dom.js';
 import { navigate } from '../router.js';
 import { themeToggleHtml, bindThemeToggles } from '../theme.js';
 import { aboutSheetHtml, bindAbout } from './about.js';
+import { waitingRowHtml } from './inbox-view.js';
 
 const FILTERS = [
     { type: 'all', label: 'All' },
@@ -103,6 +105,7 @@ export async function siteScreen(container, [id]) {
     <div class="screen-body">
         <h1 class="page-title" tabindex="-1">Pages</h1>
         <p class="build-status" id="build-status" aria-live="polite" hidden></p>
+        <div id="inbox-row"></div>
         <div class="banner" id="template-banner" role="alert" hidden></div>
         <label class="search">
             ${icon('search', 18)}
@@ -273,7 +276,13 @@ export async function siteScreen(container, [id]) {
             lastLists.set(site.id, result);
             renderList();
             status(result.offline ? `No connection. This list is from ${listTimeText(result.fetchedAt)}.` : `Updated ${listTimeText(result.fetchedAt)}`);
-            if (!result.offline) followBuild(token);
+            if (!result.offline) {
+                followBuild(token);
+                // The photo inbox: null (no answer) and 0 show no row and no error.
+                countWaiting({ site, token }).then(count => {
+                    if (isCurrent()) $('#inbox-row').innerHTML = waitingRowHtml(count, site.id);
+                }).catch(() => {});
+            }
             if (result.truncated) message('<p class="empty">The repository is very large. Some pages can be missing from the list.</p>');
         } catch (err) {
             if (!isCurrent()) return;

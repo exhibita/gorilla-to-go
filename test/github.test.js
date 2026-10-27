@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRepoInput, isBranchName, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText, saveFile, pathExists, deleteFile } from '../app/js/github.js';
+import { parseRepoInput, isBranchName, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText, saveFile, pathExists, deleteFile, getRefSha, deleteBranch, getBlobBytes } from '../app/js/github.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -526,4 +526,34 @@ test('deleteFile: no write access when GitHub refuses and the file is unchanged'
         [`GET ${FILE}?ref=main`]: fileRoute('SAME TEXT', 'OPENEDSHA')
     });
     await assert.rejects(deleteFile({ ...deleteArgs, fetch }), { message: 'No write access' });
+});
+
+test('getRefSha returns the SHA of the branch, and null when the branch does not exist', async () => {
+    const args = { owner: 'exhibita', repo: 'gtg-test-site', branch: 'gtg-inbox', token: TOKEN };
+    const found = fakeFetch({ [`GET ${REPO}/git/ref/heads/gtg-inbox`]: () => json(200, { object: { sha: 'abc' } }) });
+    assert.equal(await getRefSha({ ...args, fetch: found.fetch }), 'abc');
+    const missing = fakeFetch({ [`GET ${REPO}/git/ref/heads/gtg-inbox`]: () => json(404, {}) });
+    assert.equal(await getRefSha({ ...args, fetch: missing.fetch }), null);
+});
+
+test('deleteBranch sends DELETE to the ref, and a branch that is already gone counts as deleted', async () => {
+    const args = { owner: 'exhibita', repo: 'gtg-test-site', branch: 'gtg-inbox', token: TOKEN };
+    const route = `DELETE ${REPO}/git/refs/heads/gtg-inbox`;
+    for (const status of [204, 422]) {
+        const { fetch, calls } = fakeFetch({ [route]: () => new Response(null, { status }) });
+        await deleteBranch({ ...args, fetch });
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].method, 'DELETE');
+    }
+    const refused = fakeFetch({ [route]: () => json(403, {}) });
+    await assert.rejects(deleteBranch({ ...args, fetch: refused.fetch }), { message: 'No write access' });
+});
+
+test('getBlobBytes asks for the raw blob and returns the bytes', async () => {
+    const { fetch, calls } = fakeFetch({
+        [`GET ${REPO}/git/blobs/BLOBSHA`]: () => new Response(new Uint8Array([0xff, 0xd8, 0xff]), { status: 200 })
+    });
+    const bytes = await getBlobBytes({ owner: 'exhibita', repo: 'gtg-test-site', sha: 'BLOBSHA', token: TOKEN, fetch });
+    assert.deepEqual(bytes, new Uint8Array([0xff, 0xd8, 0xff]));
+    assert.equal(calls[0].headers.Accept, 'application/vnd.github.raw+json');
 });

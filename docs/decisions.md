@@ -35,6 +35,13 @@ All decisions were made on 2026-10-17 unless a different date is shown.
 | 29 | (2026-10-21) GTG edits these keys of a links page: `title`, `description`, `draft`, the `links:` list (`url` and `text`), the picture (`image`, `image_alt`), `sitemap` and the page `css`. |
 | 30 | (2026-10-21) A link address must be a full URL with `http:`, `https:`, `mailto:`, `tel:` or `sms:`, as in `build.js`. GTG does not add `https://`: the user types the full address. |
 | 31 | (2026-10-22) The editor Preview shows the look of the site, not the app theme, for all page types. GTG reads the colours, fonts and radius from the site's `src/css/style.css` (the rules for `body`, `h1`, `a`, `.link-button` and `.btn-primary` first, then the token names, then the template look) and keeps them on the site record. The app cannot load the site stylesheet or its web fonts (CSP), so a font that the app does not have falls back to the next font in the site's list. The `css:` of a links page does not show. |
+| 32 | (2026-10-25) Android: GTG is a share target for images (`share_target` in the manifest). Design: `docs/superpowers/specs/2026-10-25-share-to-gallery-design.md`. |
+| 33 | (2026-10-25) iPhone: an Apple Shortcut is the share path, because iOS does not support `share_target`. |
+| 34 | (2026-10-25) The iPhone inbox is the folder `gtg-inbox/` on the branch `gtg-inbox`, one shared inbox for each site. GTG deletes the branch when the inbox is empty. |
+| 35 | (2026-10-25) The users of a site can share one token. The Shortcut keeps its own copy of that token. |
+| 36 | (2026-10-25) The Shortcut converts each photo to JPEG without metadata, at most 1600 px wide, before the upload. |
+| 37 | (2026-10-25) Each waiting photo has a Discard button that deletes it from the inbox. |
+| 38 | (2026-10-25) GTG does not check inbox files and offers no purge. The Shortcut help page warns iPhone users: a shared photo stays in the repository history, so for a public repository, remove the location before sending, or use Add photos in GTG. |
 
 ## Notes
 

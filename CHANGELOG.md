@@ -2,6 +2,13 @@
 
 The newest version is first. Each version has the date when it went live.
 
+## 0.16.0 — 2026-10-25
+
+- Android: share photos from another app to a gallery. The app must be installed on the phone.
+- iPhone: an Apple Shortcut sends photos to the inbox of a site. The site screen shows "N photos waiting".
+- Open the inbox to add the waiting photos to a gallery. Tap Discard to delete a waiting photo.
+- A help page explains the Shortcut. Shared photos stay in the history of the site. Remove the location from a photo first, or use Add photos.
+
 ## 0.15.0 — 2026-10-22
 
 - The Preview shows your page in the colours and fonts of your site, also when the app uses the dark theme. This works for blog posts, pages, galleries and links pages.

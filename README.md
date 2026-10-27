@@ -8,6 +8,7 @@ With GTG you can:
 - Edit a page in a mobile Markdown editor.
 - Delete a page.
 - Add and manage images.
+- Share photos from another app to a gallery.
 - Manage more than one site.
 
 GTG does not build the site. It commits Markdown files and images to the site's GitHub repository. The site's GitHub Actions workflow builds and deploys the site.

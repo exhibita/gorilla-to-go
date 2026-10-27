@@ -133,3 +133,8 @@ export function replaceImagePath(text, from, to) {
     for (const at of pathPositions(text, from).reverse()) result = result.slice(0, at) + to + result.slice(at + from.length);
     return result;
 }
+
+// The name of a photo file. A shared Blob can have no name.
+export function photoFileName(file) {
+    return file.name || 'photo.jpg';
+}

@@ -30,3 +30,8 @@ export async function deleteSiteEdits(siteId) {
 export async function listNewPages(siteId) {
     return (await db.getAll('edits')).filter(edit => edit.siteId === siteId && !edit.baseSha);
 }
+
+// All kept edits of a site, for the inbox screen (markPending).
+export async function listSiteEdits(siteId) {
+    return (await db.getAll('edits')).filter(edit => edit.siteId === siteId);
+}

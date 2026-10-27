@@ -2,8 +2,10 @@
 // GitHub API requests always go to the network and are never cached.
 // When you add, rename or remove a file in app/, update ASSETS (a test checks this).
 // When you release a new version, VERSION changes with app/js/version.js (a test checks this).
-const VERSION = '0.15.0';
+const VERSION = '0.16.0';
 const CACHE = `gtg-${VERSION}`;
+// Photos shared to the app wait here. The name has no version, so an update does not delete them.
+const SHARE_CACHE = 'gtg-share';
 
 const ASSETS = [
     './',
@@ -46,6 +48,8 @@ const ASSETS = [
     'js/github.js',
     'js/image-resize.js',
     'js/images.js',
+    'js/inbox.js',
+    'js/incoming.js',
     'js/links.js',
     'js/new-page.js',
     'js/pages-logic.js',
@@ -57,12 +61,18 @@ const ASSETS = [
     'js/screens/add-site.js',
     'js/screens/editor-links.js',
     'js/screens/editor.js',
+    'js/screens/gallery-picker.js',
     'js/screens/help-install.js',
+    'js/screens/help-shortcut.js',
     'js/screens/help.js',
+    'js/screens/inbox-view.js',
+    'js/screens/inbox.js',
     'js/screens/new-page.js',
     'js/screens/page.js',
+    'js/screens/share.js',
     'js/screens/site.js',
     'js/screens/welcome.js',
+    'js/share-store.js',
     'js/sites-logic.js',
     'js/sites.js',
     'js/theme-boot.js',
@@ -84,14 +94,45 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys()
-            .then(keys => Promise.all(keys.filter(key => key.startsWith('gtg-') && key !== CACHE).map(key => caches.delete(key))))
+            .then(keys => Promise.all(keys.filter(key => key.startsWith('gtg-') && key !== CACHE && key !== SHARE_CACHE).map(key => caches.delete(key))))
             .then(() => self.clients.claim())
     );
 });
 
+// Keeps each shared image in SHARE_CACHE and opens the share screen.
+// The key is share/<shareId>/<index>. The time in shareId lets the app delete old shares.
+async function keepShare(request) {
+    const shareId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const keys = [];
+    let cache;
+    try {
+        cache = await caches.open(SHARE_CACHE);
+        const files = (await request.formData()).getAll('photos');
+        for (const file of files) {
+            if (typeof file === 'string' || !file.type.startsWith('image/')) continue;
+            const key = `share/${shareId}/${keys.length}`;
+            await cache.put(key, new Response(file, {
+                headers: { 'Content-Type': file.type, 'X-File-Name': encodeURIComponent(file.name) }
+            }));
+            keys.push(key);
+        }
+    } catch {
+        // For example, the storage is full. Keep no part of the share. The share screen shows "No photos were received."
+        await Promise.all(keys.map(key => cache.delete(key).catch(() => {})));
+    }
+    return Response.redirect(new URL('./#/share/' + shareId, self.registration.scope).href, 303);
+}
+
 self.addEventListener('fetch', event => {
     const { request } = event;
     const url = new URL(request.url);
+
+    // A share from another app (Android share sheet). The app must answer it: GitHub Pages cannot.
+    if (request.method === 'POST' && url.origin === self.location.origin
+        && url.href === new URL('./share-target', self.registration.scope).href) {
+        event.respondWith(keepShare(request));
+        return;
+    }
 
     // Only this app's own files. GitHub API calls and all other requests go to the network as usual.
     if (request.method !== 'GET' || url.origin !== self.location.origin) return;

@@ -908,3 +908,12 @@ button, input, textarea { font: inherit; color: inherit; }
 /* A links page: everything is centered, and the text is muted (.links-page). */
 .site-look.preview--links { text-align: center; }
 .site-look.preview--links .preview-body { color: var(--site-muted); }
+
+/* ---------- Share and Inbox screens ---------- */
+.pick-row { width: 100%; min-height: 44px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--text); font: inherit; text-align: left; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.pick-row:hover:not(:disabled) { border-color: var(--primary); }
+.pick-row:disabled { opacity: 0.55; cursor: not-allowed; }
+.pick-row > svg { flex: none; color: var(--muted); }
+.photo-card--waiting { padding-bottom: 0; cursor: default; }
+.photo-discard { margin: 0 10px 10px; }
+#inbox-row:empty { display: none; }
