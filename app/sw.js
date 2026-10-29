@@ -73,6 +73,7 @@ const ASSETS = [
     'js/screens/site.js',
     'js/screens/welcome.js',
     'js/share-store.js',
+    'js/site-config.js',
     'js/sites-logic.js',
     'js/sites.js',
     'js/theme-boot.js',
