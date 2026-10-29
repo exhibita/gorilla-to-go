@@ -70,6 +70,7 @@ const ASSETS = [
     'js/screens/new-page.js',
     'js/screens/page.js',
     'js/screens/share.js',
+    'js/screens/site-config-view.js',
     'js/screens/site.js',
     'js/screens/welcome.js',
     'js/share-store.js',
