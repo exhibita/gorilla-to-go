@@ -1,7 +1,8 @@
 // The site screen: the Pages list (mvp-plan section 6, screen 3), with search and type filters.
-// The site sheet has the site details, the template version check, and "Remove this site".
-import { getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listBuildRuns } from '../github.js';
-import { watchBuild, buildStatusHtml, showBuildStatus, recentCommit } from '../build-status.js';
+// The site sheet has the site details, the template version check, the site keys of config.json
+// (decision 39), and "Remove this site".
+import { getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listBuildRuns, getFileText, saveFile, GitHubError } from '../github.js';
+import { watchBuild, buildStatusHtml, showBuildStatus, recentCommit, rememberCommit } from '../build-status.js';
 import { getToken } from '../auth.js';
 import { getSite, listSites, removeSite, setLastSiteId, updateSite } from '../sites.js';
 import { loadPages, deviceStore } from '../pages.js';
@@ -15,6 +16,8 @@ import { navigate } from '../router.js';
 import { themeToggleHtml, bindThemeToggles } from '../theme.js';
 import { aboutSheetHtml, bindAbout } from './about.js';
 import { waitingRowHtml } from './inbox-view.js';
+import { siteConfigHtml } from './site-config-view.js';
+import { parseSiteConfig, checkSiteValues, applySiteConfig, hasSiteChanges, needsAddressWarning } from '../site-config.js';
 
 const FILTERS = [
     { type: 'all', label: 'All' },
@@ -148,6 +151,7 @@ export async function siteScreen(container, [id]) {
             <h2 class="sheet-title" id="site-sheet-title">${name}</h2>
             <p class="site-meta">${escapeHtml(site.owner)}/${escapeHtml(site.repo)} · ${escapeHtml(site.branch)}</p>
             <ul class="checks"><li id="template-row"></li></ul>
+            <div id="site-config"></div>
             <a class="text-link text-link--small" href="${repoUrl}" target="_blank" rel="noopener noreferrer">Open the repository on GitHub ${icon('external', 14)}</a>
             <button type="button" class="btn btn-danger" id="open-remove">Remove this site</button>
             <button type="button" class="btn btn-secondary" data-close>Close</button>
@@ -181,7 +185,10 @@ export async function siteScreen(container, [id]) {
         });
     }
     $('#open-switcher').addEventListener('click', () => $('#switcher').showModal());
-    $('#open-site-sheet').addEventListener('click', () => $('#site-sheet').showModal());
+    $('#open-site-sheet').addEventListener('click', () => {
+        $('#site-sheet').showModal();
+        readSiteConfig();
+    });
     for (const button of container.querySelectorAll('[data-site]')) {
         button.addEventListener('click', () => {
             $('#switcher').close();
@@ -348,6 +355,82 @@ export async function siteScreen(container, [id]) {
         }).join('');
         $('#new-pages').hidden = false;
     }).catch(() => {});
+
+    // ----- Site details (config.json, decision 39) -----
+    // Read only when the user opens the site sheet, and once for each visit, to keep the requests low.
+    // configFile: undefined (not read yet), null (no file), or { sha, text }.
+    let configFile;
+    let configRead = null;
+    const renderConfig = state => {
+        $('#site-config').innerHTML = siteConfigHtml(state);
+        $('#save-config')?.addEventListener('click', saveSiteConfig);
+    };
+    const readSiteConfig = () => {
+        if (configRead) return configRead;
+        renderConfig({ loading: true });
+        configRead = (async () => {
+            try {
+                const token = await getToken(site.id);
+                configFile = await getFileText({ ...site, path: 'config.json', token, signal: controller.signal });
+            } catch (err) {
+                configRead = null; // The next open tries again.
+                if (controller.signal.aborted) return;
+                renderConfig(err?.offline ? { offline: true } : { error: err instanceof GitHubError ? err.message : 'The app cannot read config.json. Try again.' });
+                return;
+            }
+            const parsed = parseSiteConfig(configFile?.text ?? null);
+            if (controller.signal.aborted) return;
+            renderConfig(parsed.ok ? { config: parsed.config, warning: needsAddressWarning(parsed.config, site) } : { error: parsed.error });
+        })();
+        return configRead;
+    };
+    const saveSiteConfig = async () => {
+        const { values, errors } = checkSiteValues({
+            siteUrl: $('#site-url').value,
+            siteTitle: $('#site-title').value,
+            siteDescription: $('#site-description').value
+        });
+        for (const key of ['siteUrl', 'siteTitle']) {
+            const hint = $(key === 'siteUrl' ? '#site-url-error' : '#site-title-error');
+            hint.textContent = errors[key] ?? '';
+            hint.hidden = !errors[key];
+        }
+        $('#config-error').textContent = '';
+        $('#config-saved').textContent = '';
+        if (Object.keys(errors).length) return;
+        if (!hasSiteChanges(configFile?.text ?? null, values)) {
+            $('#config-saved').textContent = 'No changes to save.';
+            return;
+        }
+        const button = $('#save-config');
+        button.disabled = true;
+        try {
+            const token = await getToken(site.id);
+            const text = applySiteConfig(configFile?.text ?? null, values);
+            const saved = await saveFile({ ...site, path: 'config.json', text, sha: configFile?.sha, message: 'Update site settings with Gorilla To Go', token });
+            if (controller.signal.aborted) return;
+            configFile = { sha: saved.sha, text };
+            $('#site-url').value = values.siteUrl;
+            $('#site-title').value = values.siteTitle;
+            $('#site-description').value = values.siteDescription;
+            $('[data-address-warning]').hidden = !needsAddressWarning(values, site);
+            $('#config-saved').textContent = 'Saved. The site builds again with the new values.';
+            if (saved.commitSha) {
+                rememberCommit(site.id, saved.commitSha);
+                followBuild(token);
+            }
+        } catch (err) {
+            if (controller.signal.aborted) return;
+            if (err?.conflict) {
+                configRead = null; // The next open reads the new file.
+                $('#config-error').textContent = 'config.json changed on GitHub. Close this sheet and open it again to read the new file.';
+            } else {
+                $('#config-error').textContent = err instanceof GitHubError ? err.message : 'The app cannot save config.json. Try again.';
+            }
+        } finally {
+            if (!controller.signal.aborted) button.disabled = false;
+        }
+    };
 
     // ----- Template version -----
     getToken(site.id)

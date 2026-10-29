@@ -31,7 +31,7 @@ Source: `docs/UPGRADE-v3.md` and `build.js` (`isLinksPage`, `linkItems`, `render
 - The blog and gallery index pages, the RSS feed and the sitemap are made during the build.
 - A GitHub Actions workflow builds and deploys the site on each push to `main`.
 - `create-page.js` refuses to overwrite an existing page.
-- The repository has `config.example.json`, so `config.json` is probably not committed. Do not store data that the app must read in `config.json`.
+- `config.json` is committed (vanilla-gorilla#14). It has `_comment`, `siteUrl`, `siteTitle` and `siteDescription`, and some sites also have `distributionId` and `awsProfile` for `invalidate.js`. The RSS feed and the sitemap use the three site values. `SITE_URL`, `SITE_TITLE` and `SITE_DESCRIPTION` environment variables win over the file. GTG edits the three site values in the site sheet (decision 39).
 
 ## Things to watch
 

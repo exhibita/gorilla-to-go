@@ -9,6 +9,7 @@ With GTG you can:
 - Delete a page.
 - Add and manage images.
 - Share photos from another app to a gallery.
+- Change the site's address, title and description (`config.json`).
 - Manage more than one site.
 
 GTG does not build the site. It commits Markdown files and images to the site's GitHub repository. The site's GitHub Actions workflow builds and deploys the site.

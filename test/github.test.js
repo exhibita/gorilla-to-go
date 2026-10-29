@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRepoInput, isBranchName, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText, saveFile, pathExists, deleteFile, getRefSha, deleteBranch, getBlobBytes } from '../app/js/github.js';
+import { parseRepoInput, isBranchName, checkSite, getTemplateVersion, REQUIRED_TEMPLATE_VERSION, listMarkdownFiles, getBlobText, saveFile, pathExists, deleteFile, getRefSha, deleteBranch, getBlobBytes, getFileText } from '../app/js/github.js';
 
 const TOKEN = 'github_pat_TESTTOKEN123';
 const API = 'https://api.github.com';
@@ -432,6 +432,27 @@ test('pathExists reports a refused token and no connection', async () => {
     const ask = fetch => pathExists({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path: 'src/x', token: TOKEN, fetch });
     await assert.rejects(ask(async () => json(401, {})), { message: 'Token not accepted' });
     await assert.rejects(ask(async () => { throw new TypeError('Failed to fetch'); }), err => err.offline === true);
+});
+
+// ---------- getFileText ----------
+
+test('getFileText reads a file as UTF-8 text with its SHA', async () => {
+    const text = '{"siteTitle":"Café"}';
+    const { fetch } = fakeFetch({
+        [`GET ${REPO}/contents/config.json?ref=main`]: () => json(200, { sha: 'abc', content: Buffer.from(text).toString('base64'), encoding: 'base64' })
+    });
+    assert.deepEqual(await getFileText({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path: 'config.json', token: TOKEN, fetch }), { sha: 'abc', text });
+});
+
+test('getFileText gives null for a missing file', async () => {
+    const { fetch } = fakeFetch({ [`GET ${REPO}/contents/config.json?ref=main`]: () => json(404, {}) });
+    assert.equal(await getFileText({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path: 'config.json', token: TOKEN, fetch }), null);
+});
+
+test('getFileText without a connection gives an offline error, and a refused token says so', async () => {
+    const read = fetch => getFileText({ owner: 'exhibita', repo: 'gtg-test-site', branch: 'main', path: 'config.json', token: TOKEN, fetch });
+    await assert.rejects(read(async () => { throw new TypeError('Failed to fetch'); }), err => err.offline === true);
+    await assert.rejects(read(async () => json(401, {})), { message: 'Token not accepted' });
 });
 
 test('saveFile for a new page: a 409 with no file on GitHub is not "the page exists"', async () => {

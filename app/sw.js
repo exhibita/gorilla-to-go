@@ -2,7 +2,7 @@
 // GitHub API requests always go to the network and are never cached.
 // When you add, rename or remove a file in app/, update ASSETS (a test checks this).
 // When you release a new version, VERSION changes with app/js/version.js (a test checks this).
-const VERSION = '0.16.0';
+const VERSION = '0.17.0';
 const CACHE = `gtg-${VERSION}`;
 // Photos shared to the app wait here. The name has no version, so an update does not delete them.
 const SHARE_CACHE = 'gtg-share';
@@ -70,9 +70,11 @@ const ASSETS = [
     'js/screens/new-page.js',
     'js/screens/page.js',
     'js/screens/share.js',
+    'js/screens/site-config-view.js',
     'js/screens/site.js',
     'js/screens/welcome.js',
     'js/share-store.js',
+    'js/site-config.js',
     'js/sites-logic.js',
     'js/sites.js',
     'js/theme-boot.js',
