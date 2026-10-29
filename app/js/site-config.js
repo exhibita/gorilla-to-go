@@ -35,7 +35,7 @@ export function checkSiteValues({ siteUrl = '', siteTitle = '', siteDescription 
         // Not a full URL.
     }
     if (!url || !['http:', 'https:'].includes(url.protocol) || !/^https?:\/\//i.test(values.siteUrl)) {
-        errors.siteUrl = 'Type the full address, with https://.';
+        errors.siteUrl = 'Type the full address, with https:// at the start.';
     }
     if (!values.siteTitle) errors.siteTitle = 'Type a title.';
     return { values, errors };
