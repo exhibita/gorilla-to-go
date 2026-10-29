@@ -271,6 +271,19 @@ function encodeBase64(text) {
     return bytesToBase64(new TextEncoder().encode(text));
 }
 
+// Read one text file on the branch (for example config.json). Returns { sha, text }, or null when
+// the file does not exist. The SHA goes to saveFile, so a file that changed since then is not overwritten.
+export async function getFileText({ owner, repo, branch, path, token, fetch = globalThis.fetch, signal, timeoutMs }) {
+    const filePath = String(path).split('/').map(encodeURIComponent).join('/');
+    try {
+        const file = await getJson(fetch, token, `${repoPath(owner, repo)}/contents/${filePath}?ref=${encodeURIComponent(branch)}`, { signal, timeoutMs }, 'not found');
+        return { sha: file.sha, text: decodeBase64(file.content) };
+    } catch (err) {
+        if (err instanceof GitHubError && err.message === 'not found') return null;
+        throw err;
+    }
+}
+
 // Save a changed file as one commit on the branch. sha is the SHA of the file that the user opened:
 // when the file changed on GitHub since then, GitHub refuses the save (409), so nothing is overwritten
 // (mvp-plan section 9). Returns { sha } of the saved file, and { commitSha } when GitHub gives it
@@ -282,8 +295,7 @@ export async function saveFile({ owner, repo, branch, path, text, sha, message, 
     // The file as it is on GitHub now: { sha, text }, or null when it cannot be read.
     const readNow = async () => {
         try {
-            const file = await getJson(fetch, token, `${contentsPath}?ref=${encodeURIComponent(branch)}`, { signal, timeoutMs }, 'File not found');
-            return { sha: file.sha, text: decodeBase64(file.content) };
+            return await getFileText({ owner, repo, branch, path, token, fetch, signal, timeoutMs });
         } catch (err) {
             if (err instanceof CancelledError) throw err;
             return null;
