@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TEMPLATE_SITE_URL, parseSiteConfig, checkSiteValues, applySiteConfig, needsAddressWarning } from '../app/js/site-config.js';
+import { TEMPLATE_SITE_URL, parseSiteConfig, checkSiteValues, applySiteConfig, needsAddressWarning, hasSiteChanges } from '../app/js/site-config.js';
 
 const FILE = '{\n  "_comment": "x",\n  "siteUrl": "https://exhibita.github.io/vanilla-gorilla",\n  "siteTitle": "Vanilla Gorilla",\n  "siteDescription": "d",\n  "distributionId": "E1",\n  "awsProfile": "p"\n}\n';
 const VALUES = { siteUrl: 'https://ex.com', siteTitle: 'Ex', siteDescription: 'About ex' };
@@ -55,4 +55,11 @@ test('needsAddressWarning: missing or template address, but never for the templa
     assert.equal(needsAddressWarning({ siteUrl: `${TEMPLATE_SITE_URL}/` }, site), true);
     assert.equal(needsAddressWarning({ siteUrl: 'https://ex.com' }, site), false);
     assert.equal(needsAddressWarning({}, { owner: 'Exhibita', repo: 'Vanilla-Gorilla' }), false);
+});
+
+test('hasSiteChanges is false when Save would commit the same text, so no commit and no build start', () => {
+    const same = { siteUrl: 'https://exhibita.github.io/vanilla-gorilla', siteTitle: 'Vanilla Gorilla', siteDescription: 'd' };
+    assert.equal(hasSiteChanges(FILE, same), false);
+    assert.equal(hasSiteChanges(FILE, VALUES), true);
+    assert.equal(hasSiteChanges(null, VALUES), true, 'no file: Save makes the file');
 });

@@ -51,6 +51,12 @@ export function applySiteConfig(text, { siteUrl, siteTitle, siteDescription }) {
     return JSON.stringify(config, null, indent) + newline;
 }
 
+// False when Save would commit the same text. Each commit to the branch starts a build, so the app
+// does not send a save without changes.
+export function hasSiteChanges(text, values) {
+    return text === null || applySiteConfig(text, values) !== text;
+}
+
 // True when the RSS feed and the sitemap use the template's address: no siteUrl (the build then uses
 // the template's address) or the template's address itself. The template repository can use it.
 export function needsAddressWarning(config, { owner, repo }) {

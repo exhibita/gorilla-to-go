@@ -17,7 +17,7 @@ import { themeToggleHtml, bindThemeToggles } from '../theme.js';
 import { aboutSheetHtml, bindAbout } from './about.js';
 import { waitingRowHtml } from './inbox-view.js';
 import { siteConfigHtml } from './site-config-view.js';
-import { parseSiteConfig, checkSiteValues, applySiteConfig, needsAddressWarning } from '../site-config.js';
+import { parseSiteConfig, checkSiteValues, applySiteConfig, hasSiteChanges, needsAddressWarning } from '../site-config.js';
 
 const FILTERS = [
     { type: 'all', label: 'All' },
@@ -398,6 +398,10 @@ export async function siteScreen(container, [id]) {
         $('#config-error').textContent = '';
         $('#config-saved').textContent = '';
         if (Object.keys(errors).length) return;
+        if (!hasSiteChanges(configFile?.text ?? null, values)) {
+            $('#config-saved').textContent = 'No changes to save.';
+            return;
+        }
         const button = $('#save-config');
         button.disabled = true;
         try {
