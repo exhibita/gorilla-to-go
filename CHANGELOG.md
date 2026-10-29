@@ -2,6 +2,11 @@
 
 The newest version is first. Each version has the date when it went live.
 
+## 0.17.0 — 2026-10-29
+
+- Change the address, the title and the description of your site in the site sheet (the gear button). The RSS feed and the sitemap use these values.
+- The site sheet warns when your site still uses the address of the template.
+
 ## 0.16.0 — 2026-10-25
 
 - Android: share photos from another app to a gallery. The app must be installed on the phone.

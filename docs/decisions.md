@@ -42,6 +42,7 @@ All decisions were made on 2026-10-17 unless a different date is shown.
 | 36 | (2026-10-25) The Shortcut converts each photo to JPEG without metadata, at most 1600 px wide, before the upload. |
 | 37 | (2026-10-25) Each waiting photo has a Discard button that deletes it from the inbox. |
 | 38 | (2026-10-25) GTG does not check inbox files and offers no purge. The Shortcut help page warns iPhone users: a shared photo stays in the repository history, so for a public repository, remove the location before sending, or use Add photos in GTG. |
+| 39 | (2026-10-29) The site sheet edits `siteUrl`, `siteTitle` and `siteDescription` in `config.json` and keeps all other keys and their order. GTG reads `config.json` only when the user opens the site sheet, to keep the number of requests low. The sheet warns when `siteUrl` is missing or is the template address, except for `exhibita/vanilla-gorilla`. |
 
 ## Notes
 

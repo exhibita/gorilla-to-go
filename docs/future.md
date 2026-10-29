@@ -22,6 +22,5 @@ Future work is tracked in GitHub issues, not in this file:
 
 ## Vanilla Gorilla issues that GTG users will see
 
-- [vanilla-gorilla#5](https://github.com/exhibita/vanilla-gorilla/issues/5): commit `config.json`, so the RSS feed and sitemap use the site's own address.
 - [vanilla-gorilla#6](https://github.com/exhibita/vanilla-gorilla/issues/6): keep a hand-built `/gallery/` page when the site also has Markdown galleries. Until then, adding a gallery in GTG replaces such a page (for example the hartisan.hair portfolio).
 - [vanilla-gorilla#7](https://github.com/exhibita/vanilla-gorilla/issues/7): a lightbox for images in blog posts. GTG needs no change.
