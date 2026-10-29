@@ -60,7 +60,9 @@ test('the app loads no third-party resources', () => {
         for (const url of urls) {
             assert.ok(
                 url.startsWith('https://api.github.com') || url.startsWith('https://github.com') || url.startsWith('http://www.w3.org/') ||
-                url === 'https://gorillatogo.app',
+                url === 'https://gorillatogo.app' ||
+                // The template's address: site-config.js compares siteUrl with it, and loads nothing.
+                (file === 'js/site-config.js' && url === 'https://exhibita.github.io/vanilla-gorilla'),
                 `${file} references ${url}`
             );
         }
