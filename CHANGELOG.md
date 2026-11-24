@@ -2,6 +2,11 @@
 
 The newest version is first. Each version has the date when it went live.
 
+## 0.17.1 — 2026-11-23
+
+- When you add a HEIC photo (an iPhone photo) in a browser that cannot read HEIC, for example on Android, the app tells you that the photo is a HEIC file.
+- A new help page tells you how to save a HEIC photo as a JPEG. Tap the ? button on the site screen, then "How to add HEIC photos".
+
 ## 0.17.0 — 2026-10-29
 
 - Change the address, the title and the description of your site in the site sheet (the gear button). The RSS feed and the sitemap use these values.

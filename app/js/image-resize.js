@@ -1,10 +1,13 @@
 // Make a photo ready for the site (mvp-plan section 7): at most MAX_WIDTH wide, and always a new copy.
 // The new copy has no EXIF data, so no GPS location of the phone goes to the public repository.
 // Browser only (canvas): the size rules are in images.js and run in tests.
-import { fitSize } from './images.js';
+import { fitSize, isHeic } from './images.js';
 import { bytesToBase64 } from './github.js';
 
 const JPEG_QUALITY = 0.85;
+
+const HEIC_MESSAGE = 'This photo is a HEIC file. This browser cannot read HEIC files. Save the photo as a JPEG, then add it again. '
+    + 'For help, tap the ? button on the site screen, then "How to add HEIC photos".';
 
 export class ImageError extends Error {}
 
@@ -18,6 +21,14 @@ async function decode(file) {
     }
 }
 
+async function startsAsHeic(file) {
+    try {
+        return isHeic(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
+    } catch {
+        return false;
+    }
+}
+
 // Returns { base64, mimeType, extension, width, height, size }. Throws ImageError with a message for the user.
 export async function prepareImage(file) {
     const type = String(file.type).toLowerCase();
@@ -28,7 +39,8 @@ export async function prepareImage(file) {
     try {
         bitmap = await decode(file);
     } catch {
-        throw new ImageError('This image format is not supported. Use a JPEG or PNG.');
+        // Safari can read HEIC, so the app looks for HEIC only when the browser cannot read the file.
+        throw new ImageError(await startsAsHeic(file) ? HEIC_MESSAGE : 'This image format is not supported. Use a JPEG or PNG.');
     }
     const canvas = document.createElement('canvas');
     try {

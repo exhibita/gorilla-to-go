@@ -138,3 +138,14 @@ export function replaceImagePath(text, from, to) {
 export function photoFileName(file) {
     return file.name || 'photo.jpg';
 }
+
+// HEIC and HEIF main brands. AVIF is not here: the browsers that the app supports can read it.
+const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs', 'mif1', 'msf1']);
+
+// True when the first 12 bytes of a file are the ftyp box of a HEIC or HEIF image (#37). A shared
+// file can have no type, or the wrong type, so the app reads the bytes.
+export function isHeic(bytes) {
+    if (bytes.length < 12) return false;
+    const text = String.fromCharCode(...bytes.subarray(4, 12));
+    return text.startsWith('ftyp') && HEIC_BRANDS.has(text.slice(4));
+}
