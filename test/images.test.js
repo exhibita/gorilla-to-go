@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    imageFolder, imageName, markdownPath, repoImagePath, fitSize, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, photoFileName, MAX_WIDTH
+    imageFolder, imageName, markdownPath, repoImagePath, fitSize, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, photoFileName, isHeic, MAX_WIDTH
 } from '../app/js/images.js';
 
 test('imageFolder puts the images of a page in src/images/<type>/<slug>/ (mvp-plan section 7)', () => {
@@ -113,4 +113,19 @@ test('photoFileName uses the file name, and photo.jpg for a Blob without a name'
     assert.equal(photoFileName({ name: 'cat.png' }), 'cat.png');
     assert.equal(photoFileName(new Blob(['x'], { type: 'image/jpeg' })), 'photo.jpg');
     assert.equal(photoFileName({ name: '' }), 'photo.jpg');
+});
+
+// The first 12 bytes of a file: the size of the ftyp box, "ftyp", then the main brand.
+const head = brand => new Uint8Array([0, 0, 0, 24, ...new TextEncoder().encode(`ftyp${brand}`)]);
+
+test('isHeic finds a HEIC or HEIF file from its first bytes, not from its name or type (#37)', () => {
+    for (const brand of ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs', 'mif1', 'msf1']) {
+        assert.equal(isHeic(head(brand)), true, brand);
+    }
+    assert.equal(isHeic(head('isom')), false, 'an MP4 video');
+    assert.equal(isHeic(head('avif')), false, 'an AVIF image');
+    assert.equal(isHeic(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1])), false, 'a JPEG');
+    assert.equal(isHeic(new Uint8Array([0x89, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13])), false, 'a PNG');
+    assert.equal(isHeic(head('heic').slice(0, 10)), false, 'a file that is too short');
+    assert.equal(isHeic(new Uint8Array()), false, 'an empty file');
 });
