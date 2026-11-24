@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    imageFolder, imageName, markdownPath, repoImagePath, fitSize, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, photoFileName, isHeic, MAX_WIDTH
+    imageFolder, imageName, markdownPath, repoImagePath, fitSize, markdownImage, referencedImages, namesInText, insertBlock, replaceImagePath, photoFileName, isHeic, textImages, MAX_WIDTH
 } from '../app/js/images.js';
 
 test('imageFolder puts the images of a page in src/images/<type>/<slug>/ (mvp-plan section 7)', () => {
@@ -128,4 +128,16 @@ test('isHeic finds a HEIC or HEIF file from its first bytes, not from its name o
     assert.equal(isHeic(new Uint8Array([0x89, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13])), false, 'a PNG');
     assert.equal(isHeic(head('heic').slice(0, 10)), false, 'a file that is too short');
     assert.equal(isHeic(new Uint8Array()), false, 'an empty file');
+});
+
+test('textImages lists the site images of a text in order, each once, for the picture of a post (#42)', () => {
+    const text = [
+        'Intro ![A cat](./images/blog/cats/cat.jpg "The cat")',
+        '<img src="./images/blog/cats/dog%20one.png" alt="">',
+        '![Again](./images/blog/cats/cat.jpg)',
+        '![Remote](https://example.com/a.jpg) ![Up](../images/x.jpg) [not an image](./images/blog/cats/link.jpg)',
+        '![Angle](<./images/blog/cats/bird.webp>)'
+    ].join('\n');
+    assert.deepEqual(textImages(text), ['src/images/blog/cats/cat.jpg', 'src/images/blog/cats/dog one.png', 'src/images/blog/cats/bird.webp']);
+    assert.deepEqual(textImages('No images.'), []);
 });

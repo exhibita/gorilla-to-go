@@ -67,6 +67,7 @@ The Links page colors have a contrast of 6.8:1 (light) and 7.6:1 (dark).
 - Editor: Write/Preview toggle, no side-by-side view. Toolbar above the keyboard: heading, bold, italic, link, list, image, undo.
 - A gallery has a third view, Photos. A links page has a third view, Links: the picture (with its alt text) at the top, then one row per link with the button text and the address. A tap on a row opens a bottom sheet: button text, address, Move earlier, Move later, Remove. "Add link" is below the list.
 - Details of a links page: no date. It adds the "Show in the sitemap" switch and the Page CSS field.
+- Details of a blog post on template version 4: it adds Picture (a thumbnail with Add picture, Choose from the post and Remove picture) and Badge. Choose from the post shows the images of the post as a grid of thumbnails. The selected image has a primary-colour border. The choice applies on Apply (decision 41).
 
 ## Preview
 

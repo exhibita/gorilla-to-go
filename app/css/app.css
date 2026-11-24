@@ -325,7 +325,7 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* ---------- Forms ---------- */
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.field label { font-size: 15px; font-weight: 600; }
+.field label, .field-label { font-size: 15px; font-weight: 600; }
 .field-hint { font-size: 13px; color: var(--muted); }
 .field-hint--error { color: var(--fail-text); font-weight: 600; }
 .field-row { display: flex; gap: 12px; }
@@ -811,6 +811,9 @@ button, input, textarea { font: inherit; color: inherit; }
 .links-picture-frame { flex: none; width: 96px; aspect-ratio: 1; border-radius: var(--radius); overflow: hidden; }
 .links-picture-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
 .links-picture-actions p { margin: 0; overflow-wrap: anywhere; }
+.post-picture-choices { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; }
+.post-picture-choice { width: 100%; padding: 0; border: 2px solid transparent; border-radius: var(--radius); overflow: hidden; cursor: pointer; }
+.post-picture-choice[aria-pressed="true"] { border-color: var(--primary); }
 .link-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .link-list > li { display: flex; }
 .link-row { width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--text); font: inherit; text-align: left; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; cursor: pointer; }

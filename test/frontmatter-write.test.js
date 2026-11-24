@@ -116,3 +116,20 @@ test('editedBody gives back the original bytes when the textarea text did not ch
     assert.equal(editedBody(inTextarea, original, '\r\n'), original);
     assert.equal(editedBody(`${inTextarea}E\n`, original, '\r\n'), 'A\r\nB\r\nC\r\nD\r\nE\r\n');
 });
+
+test('setFields sets, changes and removes the image and badge of a blog post (#42)', () => {
+    const raw = 'title: Summer hair care\ndate: 2026-05-15\ndescription: Keep your colour bright.';
+    const set = setFields(raw, { image: './images/blog/summer/summer.jpg', badge: 'Hair Care' });
+    assert.equal(set, `${raw}\nimage: "./images/blog/summer/summer.jpg"\nbadge: "Hair Care"`);
+    const data = parseFrontmatter(`---\n${set}\n---\n`).data;
+    assert.equal(data.image, './images/blog/summer/summer.jpg');
+    assert.equal(data.badge, 'Hair Care');
+    assert.equal(setFields(set, { badge: 'Colour: "Bright"' }).split('\n').pop(), 'badge: "Colour: \\"Bright\\""');
+    assert.equal(setFields(set, { image: '', badge: '  ' }), raw, 'empty values remove the keys');
+});
+
+test('setFields keeps an image and a badge that did not change, and keys that are not in the fields', () => {
+    const raw = 'title: T\nimage: ./images/blog/t/a.png\nbadge: News # the category';
+    assert.equal(setFields(raw, { title: 'T', image: './images/blog/t/a.png', badge: 'News' }), raw);
+    assert.equal(setFields(raw, { title: 'New' }), 'title: "New"\nimage: ./images/blog/t/a.png\nbadge: News # the category', 'a site before version 4: the keys stay');
+});

@@ -15,7 +15,7 @@ import { linksViewHtml, linkSheetHtml, linkListItems, previewLinks, firstLinkPro
 import { toggleWrap, toggleLinePrefix, insertLink, createHistory, continueList } from '../editor-logic.js';
 import { getLocalEdit, saveLocalEdit, deleteLocalEdit } from '../edits.js';
 import { saveFile, pathExists, commitFiles, listFolder, getImageDataUrl, getSiteCss, gitBlobSha, base64ToBytes, listBuildRuns } from '../github.js';
-import { imageFolder, imageName, markdownPath, markdownImage, referencedImages, photoFileName, namesInText, insertBlock, replaceImagePath, galleryItems, galleryImagePath, moveItem } from '../images.js';
+import { imageFolder, imageName, markdownPath, markdownImage, referencedImages, photoFileName, namesInText, insertBlock, replaceImagePath, galleryItems, galleryImagePath, moveItem, textImages, POST_IMAGE_TEMPLATE_VERSION } from '../images.js';
 import { takeIncoming } from '../incoming.js';
 import { cleanAfterPublish } from '../inbox.js';
 import { prepareImage, ImageError } from '../image-resize.js';
@@ -102,6 +102,9 @@ export async function editorScreen(container, [siteId, path]) {
     const type = pageType(path, parseFrontmatter(startText).data);
     const isGallery = type === 'gallery';
     const isLinks = type === 'links';
+    // A blog post on template version 4 has a picture and a badge for the blog index (#42). On an older
+    // site the app does not show them, and the keys stay in the file as they are.
+    const hasPostImage = type === 'blog' && site.templateVersion >= POST_IMAGE_TEMPLATE_VERSION;
     const siteHref = `#/site/${encodeURIComponent(site.id)}`;
     const backHref = isNew ? siteHref : pageHref;
 
@@ -120,6 +123,7 @@ export async function editorScreen(container, [siteId, path]) {
         fields = { title: value('title'), date: value('date'), description: value('description'), draft: isDraft(parsed.data) };
         // A links page: the picture above the title, the sitemap switch and the CSS of the page.
         if (isLinks) Object.assign(fields, { image: value('image'), image_alt: value('image_alt'), sitemap: isTrue(parsed.data.sitemap), css: value('css') });
+        if (hasPostImage) Object.assign(fields, { image: value('image'), badge: value('badge') });
         gallery = galleryItems(parsed.data);
         hasCover = Boolean(parsed.data.cover); // As the build: cover: false is no cover.
         links = linkItems(parsed.data);
@@ -213,6 +217,26 @@ export async function editorScreen(container, [siteId, path]) {
                 <textarea class="input input-multiline" id="field-description" rows="3"></textarea>
                 <div class="field-hint">${isLinks ? 'For search engines.' : 'For search engines and the RSS feed.'}</div>
             </div>
+            ${hasPostImage ? `<div class="field" role="group" aria-labelledby="post-picture-title">
+                <span class="field-label" id="post-picture-title">Picture</span>
+                <div class="links-picture-row">
+                    <span class="photo-frame links-picture-frame" id="post-picture-frame"></span>
+                    <div class="links-picture-actions">
+                        <p class="muted small" id="post-picture-info"></p>
+                        <button type="button" class="btn-small" id="post-picture-change">${icon('image', 16)} <span id="post-picture-change-text">Add picture</span></button>
+                        <button type="button" class="btn-small" id="post-picture-choose" aria-expanded="false" aria-controls="post-picture-choices">Choose from the post</button>
+                        <button type="button" class="btn-small" id="post-picture-remove">Remove picture</button>
+                    </div>
+                </div>
+                <ul class="post-picture-choices" id="post-picture-choices" aria-label="Images in the post" hidden></ul>
+                <div class="field-hint">Optional. The blog list and the recent posts show the picture. The post itself does not.</div>
+                <input type="file" id="post-picture-file" accept="image/*" hidden>
+            </div>
+            <div class="field">
+                <label for="field-badge">Badge</label>
+                <input class="input" id="field-badge" type="text">
+                <div class="field-hint">Optional. A short label, for example a category. The blog list shows it.</div>
+            </div>` : ''}
             ${isLinks ? `<label class="switch-row" for="field-sitemap">
                 <input type="checkbox" id="field-sitemap">
                 <span class="switch-text">
@@ -785,30 +809,37 @@ export async function editorScreen(container, [siteId, path]) {
     const linkSheet = $('#link-sheet');
     let linkIndex = -1; // The link in the sheet. -1: a new link.
 
-    // The picture above the title: a file of the site, or an address on another site (the app cannot
-    // show that one: the Content Security Policy allows images from the app and GitHub only).
-    const renderPicture = () => {
-        const picturePath = fields.image ? galleryImagePath(fields.image) : null;
-        const frame = $('#picture-frame');
+    // A picture row (the picture of a links page, or of a blog post in Details): a file of the site, or
+    // an address on another site (the app cannot show that one: the Content Security Policy allows
+    // images from the app and GitHub only). current() gives the value now, so a late image is not shown.
+    const renderPictureRow = (prefix, current, emptyText) => {
+        const image = current();
+        const picturePath = image ? galleryImagePath(image) : null;
+        const frame = $(`#${prefix}-frame`);
         frame.replaceChildren();
         if (picturePath) {
             const img = document.createElement('img');
             img.alt = '';
             img.addEventListener('error', () => img.remove(), { once: true });
             imageUrl(picturePath).then(url => {
-                if (url && fields.image && galleryImagePath(fields.image) === picturePath) img.src = url;
+                if (url && current() && galleryImagePath(current()) === picturePath) img.src = url;
                 else img.remove();
             });
             frame.append(img);
         }
-        const notPublished = pendingImages.some(image => image.path === picturePath);
-        $('#picture-info').textContent = !fields.image
-            ? 'No picture. The picture shows above the title.'
+        const notPublished = pendingImages.some(pending => pending.path === picturePath);
+        $(`#${prefix}-info`).textContent = !image
+            ? emptyText
             : picturePath
-                ? `${fields.image.split('/').pop()}${notPublished ? ' (not published)' : ''}`
-                : `Picture from another address: ${fields.image}`;
-        $('#picture-change-text').textContent = fields.image ? 'Change picture' : 'Add picture';
-        $('#picture-remove').hidden = !fields.image;
+                ? `${image.split('/').pop()}${notPublished ? ' (not published)' : ''}`
+                : `Picture from another address: ${image}`;
+        $(`#${prefix}-change-text`).textContent = image ? 'Change picture' : 'Add picture';
+        $(`#${prefix}-remove`).hidden = !image;
+    };
+
+    // The picture above the title of a links page.
+    const renderPicture = () => {
+        renderPictureRow('picture', () => fields.image, 'No picture. The picture shows above the title.');
         $('#picture-alt-field').hidden = !fields.image;
         $('#picture-alt').value = fields.image_alt;
     };
@@ -1063,12 +1094,22 @@ export async function editorScreen(container, [siteId, path]) {
             $('#field-sitemap').checked = fields.sitemap;
             $('#field-css').value = fields.css;
         }
+        if (hasPostImage) {
+            sheetImage = fields.image;
+            closeChoices();
+            renderPostPicture();
+            $('#field-badge').value = fields.badge;
+        }
         $('#details-error').textContent = '';
         dateTouched = false;
         details.showModal();
     });
     $('#details-form').addEventListener('submit', event => {
         event.preventDefault();
+        if (hasPostImage && preparing) {
+            $('#details-error').textContent = 'Wait until the picture is ready, then tap Apply.';
+            return;
+        }
         const typedTitle = $('#field-title').value.trim();
         if (!typedTitle) {
             $('#details-error').textContent = 'Type a title.';
@@ -1085,9 +1126,94 @@ export async function editorScreen(container, [siteId, path]) {
             draft: $('#field-draft').checked
         };
         if (isLinks) Object.assign(fields, { sitemap: $('#field-sitemap').checked, css: $('#field-css').value });
+        if (hasPostImage) {
+            const typedBadge = $('#field-badge').value.trim();
+            Object.assign(fields, { image: sheetImage, badge: typedBadge === fields.badge.trim() ? fields.badge : typedBadge });
+        }
         showTitle();
         details.close();
         keepNow();
+    });
+
+    // The picture of a blog post (#42). The sheet keeps the choice until Apply. A photo that the user
+    // adds and then cancels stays in pendingImages, but only images that the page uses are kept and
+    // published (referencedImages).
+    let sheetImage = '';
+    const renderPostPicture = () => {
+        renderPictureRow('post-picture', () => sheetImage, 'No picture.');
+        $('#post-picture-choose').hidden = textImages(textarea.value).length === 0;
+    };
+    // The images in the text of the post, as buttons. Tap one to make it the picture.
+    const closeChoices = () => {
+        $('#post-picture-choices').hidden = true;
+        $('#post-picture-choose').setAttribute('aria-expanded', 'false');
+    };
+    $('#post-picture-choose')?.addEventListener('click', () => {
+        const list = $('#post-picture-choices');
+        if (!list.hidden) {
+            closeChoices();
+            return;
+        }
+        const selected = sheetImage ? galleryImagePath(sheetImage) : null;
+        list.replaceChildren(...textImages(textarea.value).map(imagePath => {
+            const item = document.createElement('li');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'photo-frame post-picture-choice';
+            button.setAttribute('aria-label', imagePath.split('/').pop());
+            button.setAttribute('aria-pressed', String(imagePath === selected));
+            const img = document.createElement('img');
+            img.alt = '';
+            img.addEventListener('error', () => img.remove(), { once: true });
+            imageUrl(imagePath).then(url => (url ? (img.src = url) : img.remove()));
+            button.append(img);
+            button.addEventListener('click', () => {
+                sheetImage = markdownPath(imagePath);
+                closeChoices();
+                renderPostPicture();
+                $('#post-picture-choose').focus();
+            });
+            item.append(button);
+            return item;
+        }));
+        list.hidden = false;
+        $('#post-picture-choose').setAttribute('aria-expanded', 'true');
+    });
+    $('#post-picture-change')?.addEventListener('click', () => {
+        if (publishing) {
+            $('#details-error').textContent = 'Wait until Publish is complete, then change the picture.';
+            return;
+        }
+        if (preparing) return;
+        $('#post-picture-file').click();
+    });
+    $('#post-picture-remove')?.addEventListener('click', () => {
+        sheetImage = '';
+        closeChoices();
+        renderPostPicture();
+        $('#post-picture-change').focus();
+    });
+    $('#post-picture-file')?.addEventListener('change', async () => {
+        const input = $('#post-picture-file');
+        const file = input.files[0];
+        input.value = '';
+        if (!file) return;
+        preparing = true;
+        $('#details-error').textContent = '';
+        $('#post-picture-info').textContent = 'Making the picture ready.';
+        try {
+            const prepared = await prepareImage(file);
+            githubNames = await namesOnGitHub();
+            const repoPath = folder + freeName(file.name, prepared.extension);
+            pendingImages = [...pendingImages, { path: repoPath, base64: prepared.base64, mimeType: prepared.mimeType }];
+            sheetImage = markdownPath(repoPath);
+            closeChoices();
+        } catch (err) {
+            $('#details-error').textContent = err instanceof ImageError ? err.message : 'The app cannot read this image. Use a JPEG or PNG.';
+        } finally {
+            preparing = false;
+        }
+        if (details.open) renderPostPicture();
     });
 
     // ----- Publish -----
@@ -1117,9 +1243,9 @@ export async function editorScreen(container, [siteId, path]) {
             const taken = [...onGitHub.map(file => file.name), ...namesInText(currentText(), folder), ...pendingNames()];
             const name = imageName(oldName, oldName.split('.').pop(), taken);
             textarea.value = replaceImagePath(textarea.value, markdownPath(image.path), markdownPath(folder + name));
-            // A gallery photo: its path in the images: list changes too. The picture of a links page too.
+            // A gallery photo: its path in the images: list changes too. The picture of a links page or a blog post too.
             gallery = gallery.map(item => (isPhoto(item) && galleryImagePath(item.path) === image.path ? { ...item, path: markdownPath(folder + name) } : item));
-            if (isLinks && fields.image && galleryImagePath(fields.image) === image.path) fields.image = markdownPath(folder + name);
+            if (fields.image && galleryImagePath(fields.image) === image.path) fields.image = markdownPath(folder + name);
             image.path = folder + name;
             notes.push(`A file with the name ${oldName} exists on GitHub, so the app changed the image name to ${name}.`);
         }

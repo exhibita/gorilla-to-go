@@ -6,6 +6,7 @@ With GTG you can:
 
 - Add a page to a site: a blog post, a page or a gallery.
 - Edit a page in a mobile Markdown editor.
+- Set a picture and a badge for a blog post (template version 4).
 - Delete a page.
 - Add and manage images.
 - Share photos from another app to a gallery.
