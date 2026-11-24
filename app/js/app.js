@@ -10,7 +10,7 @@ import { editorScreen } from './screens/editor.js';
 import { newPageScreen } from './screens/new-page.js';
 import { shareScreen } from './screens/share.js';
 import { inboxScreen } from './screens/inbox.js';
-import { tokenHelpScreen, upgradeHelpScreen, installHelpScreen, shortcutHelpScreen, changesHelpScreen } from './screens/help.js';
+import { tokenHelpScreen, upgradeHelpScreen, installHelpScreen, shortcutHelpScreen, heicHelpScreen, changesHelpScreen } from './screens/help.js';
 
 // "#/": open the last site, else the first site, else the Welcome screen (decision 13).
 async function homeScreen(container) {
@@ -39,6 +39,7 @@ function start() {
     route(/^#\/help\/upgrade$/, upgradeHelpScreen);
     route(/^#\/help\/install$/, installHelpScreen);
     route(/^#\/help\/shortcut$/, shortcutHelpScreen);
+    route(/^#\/help\/heic$/, heicHelpScreen);
     route(/^#\/help\/changes$/, changesHelpScreen);
 
     startRouter(document.getElementById('app'));
