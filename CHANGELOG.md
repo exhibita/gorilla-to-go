@@ -2,6 +2,11 @@
 
 The newest version is first. Each version has the date when it went live.
 
+## 0.18.0 — 2026-11-23
+
+- A blog post has a Picture and a Badge in Details. Add a new photo as the picture, or choose an image from the post. The blog list and the recent posts on your site show them. The site needs template version 4.
+- The "Upgrade a site" help page tells you how to upgrade a site to version 4.
+
 ## 0.17.1 — 2026-11-23
 
 - When you add a HEIC photo (an iPhone photo) in a browser that cannot read HEIC, for example on Android, the app tells you that the photo is a HEIC file.

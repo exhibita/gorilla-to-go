@@ -71,12 +71,13 @@ function keyRange(lines, key) {
     return { start, end };
 }
 
-// Set title, date, description, and the image and image_alt of a links page, in the YAML text. An
+// Set title, date, description, the image and image_alt of a links page, and the image and badge of a
+// blog post (template version 4), in the YAML text. An
 // empty value removes the key. A value that did not change keeps its line exactly as it is.
 export function setFields(raw, fields) {
     const current = parseFrontmatter(`---\n${raw}\n---\n`).data;
     const lines = raw === '' ? [] : raw.split('\n');
-    for (const key of ['title', 'date', 'description', 'image', 'image_alt']) {
+    for (const key of ['title', 'date', 'description', 'image', 'image_alt', 'badge']) {
         if (!(key in fields)) continue;
         const value = String(fields[key] ?? '').trim() === '' ? '' : String(fields[key]);
         const before = current[key] == null ? '' : String(current[key]);

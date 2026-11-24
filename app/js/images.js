@@ -14,6 +14,10 @@ export function imageFolder(pagePath) {
     return `src/images/${type}/${slug}/`;
 }
 
+// The template version that adds the image: and badge: keys of a blog post (#42). The blog index and
+// the recent posts list show them. An older build ignores the keys.
+export const POST_IMAGE_TEMPLATE_VERSION = 4;
+
 // src/images/... → ./images/... (the path in the Markdown; build.js rewrites ./ for the page depth).
 // Each part is encoded, so a folder with a space or a parenthesis (a hand-made page) still gives a
 // Markdown image.
@@ -120,6 +124,17 @@ function pathPositions(text, path) {
         at = text.indexOf(path, at + 1);
     }
     return positions;
+}
+
+// The images of the site that a Markdown text shows, in order, each once: Markdown images and HTML
+// <img> elements with a ./images/ path. Each is a repository path (src/images/...). An address on
+// another site is left out: the app cannot show it (#42: choose the picture of a post).
+export function textImages(text) {
+    const addresses = [
+        ...String(text).matchAll(/!\[[^\]]*\]\(\s*<?([^\s)>]+)>?(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/g),
+        ...String(text).matchAll(/<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi)
+    ].sort((a, b) => a.index - b.index).map(match => match[1]);
+    return [...new Set(addresses.map(address => repoImagePath(address)).filter(Boolean))];
 }
 
 // The images whose ./images/ path the text still uses. A deleted image line is not uploaded.

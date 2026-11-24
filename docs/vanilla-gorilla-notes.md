@@ -25,6 +25,14 @@ Source: `docs/UPGRADE-v3.md` and `build.js` (`isLinksPage`, `linkItems`, `render
 - A site on template version 2 has no links skeleton, so the build skips the page with a warning. GTG offers links pages only on version 3 (decision 27).
 - The template has a draft sample page, `src/links/index.md`.
 
+## Post image and badge (template version 4)
+
+Source: `docs/UPGRADE-v4.md` and `build.js` (`postCardFields`), read on 2026-11-23.
+
+- A blog post can have `image:` (a path from `src/`, with or without `./`, or a full URL) and `badge:` (a short label). The blog index and the recent posts list show them. The post page itself does not.
+- The build writes the image with `alt=""`, so the post needs no alt text for it. The build does not use an image from the body of the post.
+- An older build ignores the keys. GTG shows the fields only on version 4 (decision 41).
+
 ## Build and deploy
 
 - `build.js` compiles Markdown and templates into `index.html` files with directory-style URLs.

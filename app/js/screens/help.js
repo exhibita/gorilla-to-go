@@ -1,5 +1,5 @@
 // Help pages inside the app, so they work offline (decision 16).
-// Token page: from docs/github-token.md. Upgrade page: from vanilla-gorilla docs/UPGRADE-v2.md and UPGRADE-v3.md.
+// Token page: from docs/github-token.md. Upgrade page: from vanilla-gorilla docs/UPGRADE-v2.md, UPGRADE-v3.md and UPGRADE-v4.md.
 // Install page: from docs/install-app.md (help-install.js). Shortcut page: from docs/ios-shortcut.md (help-shortcut.js).
 // HEIC page: help-heic.js.
 // What is new: CHANGELOG.md. All versions from GitHub when online; the last 3 (in the app) when offline.
@@ -14,6 +14,7 @@ import { INSTALL_PAGE } from './help-install.js';
 import { SHORTCUT_PAGE } from './help-shortcut.js';
 import { HEIC_PAGE } from './help-heic.js';
 import { LINKS_TEMPLATE_VERSION } from '../links.js';
+import { POST_IMAGE_TEMPLATE_VERSION } from '../images.js';
 import { VERSION } from '../version.js';
 
 const TOKEN_PAGE = `
@@ -125,7 +126,24 @@ const UPGRADE_PAGE = `
     <li>Make sure the GitHub Actions deploy is successful.</li>
 </ol>
 <p>Existing pages do not change. You do not have to add the site again: the app reads the version each time you open the site.</p>
-<p><a class="text-link text-link--small" href="https://github.com/exhibita/vanilla-gorilla/blob/main/docs/UPGRADE-v3.md" target="_blank" rel="noopener noreferrer">Read the version ${LINKS_TEMPLATE_VERSION} upgrade guide on GitHub ${icon('external', 14)}</a></p>`;
+<p><a class="text-link text-link--small" href="https://github.com/exhibita/vanilla-gorilla/blob/main/docs/UPGRADE-v3.md" target="_blank" rel="noopener noreferrer">Read the version ${LINKS_TEMPLATE_VERSION} upgrade guide on GitHub ${icon('external', 14)}</a></p>
+
+<h2>Upgrade to version ${POST_IMAGE_TEMPLATE_VERSION} for post pictures and badges</h2>
+<p>Version ${POST_IMAGE_TEMPLATE_VERSION} adds a picture and a badge (a short label) for each blog post. The blog list and the recent posts show them. Gorilla To Go shows the Picture and Badge fields in Details only on a site with version ${POST_IMAGE_TEMPLATE_VERSION}. A site on an older version must do the earlier steps first.</p>
+<ol>
+    <li>Make a new branch in the site repository.</li>
+    <li>Copy <code>build.js</code> from the template into the site.</li>
+    <li>Copy the "Post image and badge" block from <code>src/css/style.css</code> of the template to <code>src/css/style.css</code> in the site.</li>
+    <li>In <code>package.json</code>, change the version:
+        <pre><code>"vanillaGorilla": { "templateVersion": ${POST_IMAGE_TEMPLATE_VERSION} }</code></pre>
+    </li>
+    <li>Run <code>npm run build</code>.</li>
+    <li>Make sure the build shows <code>Build complete.</code></li>
+    <li>Merge the branch into <code>main</code>.</li>
+    <li>Make sure the GitHub Actions deploy is successful.</li>
+</ol>
+<p>Existing pages do not change. A site with its own theme can need changes to its CSS. Read the guide first.</p>
+<p><a class="text-link text-link--small" href="https://github.com/exhibita/vanilla-gorilla/blob/main/docs/UPGRADE-v4.md" target="_blank" rel="noopener noreferrer">Read the version ${POST_IMAGE_TEMPLATE_VERSION} upgrade guide on GitHub ${icon('external', 14)}</a></p>`;
 
 function helpScreen(container, title, body) {
     container.innerHTML = `
